@@ -17,13 +17,13 @@ export default async function handler(req, res) {
     const prompt = `
 You are an expert career coach.
 
-Based on the resume below, suggest EXACTLY 3 high-quality job roles.
+Based on this resume, suggest EXACTLY 3 NEW job roles.
 
-IMPORTANT RULES:
-- Do NOT repeat any of these jobs: ${seenJobs.join(", ")}
-- Be realistic (top companies)
-- Output STRICT JSON ONLY
-- No markdown, no explanation, no extra text
+STRICT RULES:
+- Do NOT repeat: ${seenJobs.join(", ")}
+- Be realistic roles (Google, Amazon, etc.)
+- Return STRICT JSON ONLY
+- No markdown, no explanation
 
 FORMAT:
 {
@@ -33,15 +33,15 @@ FORMAT:
       "company": "Company name",
       "score": 85,
       "gap": "Biggest missing skill",
-      "strategy": "2 concise sentences on how to pivot",
-      "courseTitle": "Best course to bridge gap",
-      "latex": "\\\\cventry{2022--Present}{Title}{Company}{}{}{\\\\begin{itemize}\\\\item Improved bullet\\\\end{itemize}}"
+      "strategy": "2 short sentences",
+      "courseTitle": "Best course name",
+      "latex": "\\\\cventry{2022--Present}{Role}{Company}{}{}{\\\\begin{itemize}\\\\item Improved bullet\\\\end{itemize}}"
     }
   ]
 }
 
 Resume:
-${resumeText.slice(0, 4000)}
+${resumeText.slice(0, 3500)}
 `;
 
     const response = await fetch(
@@ -52,16 +52,10 @@ ${resumeText.slice(0, 4000)}
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }]
-            }
-          ],
+          contents: [{ parts: [{ text: prompt }] }],
           generationConfig: {
             temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 900
+            maxOutputTokens: 800
           }
         })
       }
@@ -69,7 +63,6 @@ ${resumeText.slice(0, 4000)}
 
     const data = await response.json();
 
-    // 🔍 Extract text safely
     const text =
       data?.candidates?.[0]?.content?.parts
         ?.map(p => p.text || "")
@@ -77,17 +70,16 @@ ${resumeText.slice(0, 4000)}
 
     if (!text) {
       return res.status(500).json({
-        error: "Empty response from Gemini",
+        error: "Empty Gemini response",
         raw: data
       });
     }
 
-    // 🧠 Extract JSON from response
     const match = text.match(/\{[\s\S]*\}/);
 
     if (!match) {
       return res.status(500).json({
-        error: "Invalid AI response format",
+        error: "Invalid AI response",
         raw: text
       });
     }
@@ -98,22 +90,15 @@ ${resumeText.slice(0, 4000)}
       parsed = JSON.parse(match[0]);
     } catch (e) {
       return res.status(500).json({
-        error: "JSON parsing failed",
+        error: "JSON parse failed",
         raw: text
-      });
-    }
-
-    if (!parsed.jobs || !Array.isArray(parsed.jobs)) {
-      return res.status(500).json({
-        error: "Malformed jobs response",
-        raw: parsed
       });
     }
 
     return res.status(200).json(parsed);
 
   } catch (err) {
-    console.error("🔥 API ERROR:", err);
+    console.error("API ERROR:", err);
 
     return res.status(500).json({
       error: "Failed",
