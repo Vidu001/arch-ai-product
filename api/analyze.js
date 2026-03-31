@@ -1,64 +1,77 @@
 export default async function handler(req, res) {
-  try {
-    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  // 1. CORS Headers (Crucial for Vercel)
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
+  try {
     const { resumeText, seenJobs = [] } = req.body || {};
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
-      return res.status(500).json({ error: "API Key missing in Vercel environment variables." });
+      return res.status(500).json({ error: "Missing API Key. Check Vercel Environment Variables." });
     }
 
-    // List of models to rotate through in case of regional 404s
-    const models = ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-pro"];
-    let lastError = "";
+    /**
+     * FOR THE FREE TIER:
+     * Use version 'v1beta' and model 'gemini-1.5-flash'. 
+     * This is the most reliable path for free keys.
+     */
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
-    for (const modelName of models) {
-      try {
-        // We use the STABLE v1 endpoint first, then v1beta if needed
-        const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${apiKey}`;
-        
-        const response = await fetch(url, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [{
-              parts: [{
-                text: `Return a JSON object with 3 job recommendations for this resume: ${resumeText.slice(0, 3000)}. 
-                Exclude: ${seenJobs.join(", ")}. 
-                Required JSON keys: jobs (array of objects with title, company, score, gap, strategy, courseTitle, latex). 
-                Return ONLY the raw JSON, no markdown code blocks.`
-              }]
-            }]
-          })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          // Clean up any markdown AI might have added
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          if (jsonMatch) {
-            return res.status(200).json(JSON.parse(jsonMatch[0]));
+    const prompt = `
+      Act as a Career Architect. Analyze this resume: ${resumeText.slice(0, 3000)}
+      Suggest 3 high-revenue roles. Skip these: ${seenJobs.join(", ")}
+      
+      IMPORTANT: Return ONLY a valid JSON object. Do not include markdown code blocks.
+      Structure:
+      {
+        "jobs": [
+          {
+            "title": "Role Name",
+            "company": "Target Company",
+            "score": 92,
+            "gap": "Specific Skill",
+            "strategy": "Actionable advice",
+            "courseTitle": "Course Link Name",
+            "latex": "Resume Snippet"
           }
-        } else {
-          lastError = data.error?.message || "Unknown error";
-          if (response.status === 404) continue; // Try the next model
-          else break; // If it's a 400 or 429, don't loop
-        }
-      } catch (e) {
-        lastError = e.message;
-        continue;
+        ]
       }
+    `;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: {
+          // Force JSON output mode (Free tier feature)
+          responseMimeType: "application/json"
+        }
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return res.status(response.status).json({
+        error: "Google API Rejection",
+        message: data.error?.message,
+        tip: "Go to Cloud Console, search 'Generative Language API', and click ENABLE."
+      });
     }
 
-    // IF WE REACH HERE, ALL MODELS FAILED
-    return res.status(500).json({ 
-      error: "AI Engine Connection Failure", 
-      message: lastError,
-      action: "Please go to Google Cloud Console > APIs & Services > Library > Search 'Generative Language API' > Ensure it is ENABLED for your project."
-    });
+    // Extracting text (Gemini returns JSON inside the text part when responseMimeType is JSON)
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    
+    if (!rawText) {
+      return res.status(500).json({ error: "AI returned empty content." });
+    }
+
+    return res.status(200).json(JSON.parse(rawText));
 
   } catch (err) {
     return res.status(500).json({ error: "Server Error", details: err.message });
