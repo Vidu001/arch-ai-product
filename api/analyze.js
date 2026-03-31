@@ -1,46 +1,72 @@
 export default async function handler(req, res) {
   try {
-    const { resumeText } = req.body;
+    if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+
+    const { resumeText, seenJobs = [] } = req.body || {};
     const apiKey = process.env.GEMINI_API_KEY;
 
-    // 1. Use the STABLE v1 API instead of v1beta
-    // 2. Use the exact production model name
-    const url = `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY is not set in Vercel" });
+
+    // THE FIX: Use v1beta with gemini-pro (High compatibility) or gemini-1.5-flash-latest
+    // We will try the most stable one first
+    const modelName = "gemini-1.5-flash-latest"; 
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+
+    const prompt = `
+      Return ONLY a JSON object. No intro text. No markdown backticks.
+      
+      Suggest 3 career roles for this resume: ${resumeText.slice(0, 3000)}
+      Do not repeat: ${seenJobs.join(", ")}
+
+      JSON structure:
+      {
+        "jobs": [
+          {
+            "title": "String",
+            "company": "String",
+            "score": 95,
+            "gap": "String",
+            "strategy": "String",
+            "courseTitle": "String",
+            "latex": "String"
+          }
+        ]
+      }
+    `;
 
     const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `Return a JSON object with 3 job recommendations for this resume: ${resumeText.slice(0, 2000)}. 
-            Format: {"jobs": [{"title": "...", "company": "...", "score": 90, "gap": "...", "strategy": "...", "courseTitle": "...", "latex": "..."}]}`
-          }]
-        }],
-        // Stable v1 does not use the 'responseSchema' field in the same way as Beta,
-        // so we use a clear prompt and JSON.parse.
+        contents: [{ parts: [{ text: prompt }] }]
       })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      return res.status(response.status).json({ 
-        error: "API Check Failed", 
-        details: data.error?.message || "Check if Generative Language API is enabled in Google Cloud Console." 
+      // If 1.5-flash-latest fails, it's likely a regional naming issue. 
+      // This error block helps us see exactly what your specific key wants.
+      return res.status(response.status).json({
+        error: "Model Name Error",
+        hint: "Try changing modelName to 'gemini-pro' in the code if this persists.",
+        details: data.error?.message
       });
     }
 
-    // Extracting text from stable v1 response
-    const rawText = data.candidates[0].content.parts[0].text;
-    
-    // Clean up potential markdown formatting (```json ... ```)
-    const jsonString = rawText.replace(/```json/g, "").replace(/```/g, "").trim();
-    const parsed = JSON.parse(jsonString);
+    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
 
-    return res.status(200).json(parsed);
+    // CLEANUP: AI often wraps JSON in ```json ... ``` which breaks JSON.parse
+    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    
+    try {
+      const parsed = JSON.parse(cleanJson);
+      return res.status(200).json(parsed);
+    } catch (parseErr) {
+      return res.status(500).json({ error: "AI returned invalid JSON", raw: text });
+    }
 
   } catch (err) {
-    return res.status(500).json({ error: "Execution Error", message: err.message });
+    return res.status(500).json({ error: "Server Crash", details: err.message });
   }
 }
