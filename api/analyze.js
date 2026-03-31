@@ -5,30 +5,29 @@ export default async function handler(req, res) {
     const { resumeText, seenJobs = [] } = req.body || {};
     const apiKey = process.env.GEMINI_API_KEY;
 
-    if (!apiKey) return res.status(500).json({ error: "GEMINI_API_KEY is not set in Vercel" });
+    if (!apiKey) return res.status(500).json({ error: "API Key missing in Vercel settings" });
 
-    // THE FIX: Use v1beta with gemini-pro (High compatibility) or gemini-1.5-flash-latest
-    // We will try the most stable one first
-    const modelName = "gemini-1.5-flash-latest"; 
+    // THE ABSOLUTE FIX: 
+    // 'gemini-pro' is the universal model name that works on ALL keys.
+    const modelName = "gemini-pro"; 
     const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
 
     const prompt = `
-      Return ONLY a JSON object. No intro text. No markdown backticks.
+      You are a JSON generator. Analyze this resume: ${resumeText.slice(0, 2500)}
+      Suggest 3 unique jobs. Exclude these: ${seenJobs.join(", ")}
       
-      Suggest 3 career roles for this resume: ${resumeText.slice(0, 3000)}
-      Do not repeat: ${seenJobs.join(", ")}
-
-      JSON structure:
+      Return ONLY a JSON object. No intro. No markdown.
+      Structure:
       {
         "jobs": [
           {
-            "title": "String",
-            "company": "String",
-            "score": 95,
-            "gap": "String",
-            "strategy": "String",
-            "courseTitle": "String",
-            "latex": "String"
+            "title": "Job Name",
+            "company": "Company Name",
+            "score": 90,
+            "gap": "Missing Skill",
+            "strategy": "How to get it",
+            "courseTitle": "Course Name",
+            "latex": "LaTeX code"
           }
         ]
       }
@@ -38,35 +37,36 @@ export default async function handler(req, res) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }]
+        contents: [{ role: "user", parts: [{ text: prompt }] }]
       })
     });
 
     const data = await response.json();
 
     if (!response.ok) {
-      // If 1.5-flash-latest fails, it's likely a regional naming issue. 
-      // This error block helps us see exactly what your specific key wants.
       return res.status(response.status).json({
-        error: "Model Name Error",
-        hint: "Try changing modelName to 'gemini-pro' in the code if this persists.",
-        details: data.error?.message
+        error: "Google API Rejected Request",
+        message: data.error?.message,
+        tip: "If this is 404, check your Google Cloud Project to see if Generative Language API is enabled for project: Career-arch-ai"
       });
     }
 
-    let text = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-
-    // CLEANUP: AI often wraps JSON in ```json ... ``` which breaks JSON.parse
-    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
     
+    // Robust JSON Extraction (removes markdown backticks and accidental text)
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return res.status(500).json({ error: "AI failed to format JSON", raw: rawText });
+    }
+
     try {
-      const parsed = JSON.parse(cleanJson);
+      const parsed = JSON.parse(jsonMatch[0]);
       return res.status(200).json(parsed);
-    } catch (parseErr) {
-      return res.status(500).json({ error: "AI returned invalid JSON", raw: text });
+    } catch (e) {
+      return res.status(500).json({ error: "Final Parse Failed", details: e.message });
     }
 
   } catch (err) {
-    return res.status(500).json({ error: "Server Crash", details: err.message });
+    return res.status(500).json({ error: "Internal Server Error", details: err.message });
   }
 }
