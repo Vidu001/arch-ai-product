@@ -6,8 +6,8 @@ export default async function handler(req, res) {
 
     const { resumeText, seenJobs = [] } = req.body || {};
 
-    if (!resumeText || resumeText.trim().length < 50) {
-      return res.status(400).json({ error: "Invalid or empty resumeText" });
+    if (!resumeText || resumeText.length < 50) {
+      return res.status(400).json({ error: "Invalid resumeText" });
     }
 
     if (!process.env.GEMINI_API_KEY) {
@@ -17,51 +17,56 @@ export default async function handler(req, res) {
     const prompt = `
 You are an expert career coach.
 
-Based on this resume, suggest EXACTLY 3 NEW job roles.
+Suggest EXACTLY 3 NEW job roles.
 
-STRICT RULES:
-- Do NOT repeat: ${seenJobs.join(", ")}
-- Be realistic roles (Google, Amazon, etc.)
-- Return STRICT JSON ONLY
-- No markdown, no explanation
+DO NOT repeat: ${seenJobs.join(", ")}
+
+Return STRICT JSON ONLY. No explanation.
 
 FORMAT:
 {
   "jobs": [
     {
-      "title": "Job title",
-      "company": "Company name",
+      "title": "",
+      "company": "",
       "score": 85,
-      "gap": "Biggest missing skill",
-      "strategy": "2 short sentences",
-      "courseTitle": "Best course name",
-      "latex": "\\\\cventry{2022--Present}{Role}{Company}{}{}{\\\\begin{itemize}\\\\item Improved bullet\\\\end{itemize}}"
+      "gap": "",
+      "strategy": "",
+      "courseTitle": "",
+      "latex": ""
     }
   ]
 }
 
 Resume:
-${resumeText.slice(0, 3500)}
+${resumeText.slice(0, 3000)}
 `;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }],
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ],
           generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 800
+            temperature: 0.6,
+            maxOutputTokens: 700
           }
         })
       }
     );
 
     const data = await response.json();
+
+    // DEBUG LOG
+    console.log("Gemini raw:", JSON.stringify(data));
 
     const text =
       data?.candidates?.[0]?.content?.parts
@@ -79,7 +84,7 @@ ${resumeText.slice(0, 3500)}
 
     if (!match) {
       return res.status(500).json({
-        error: "Invalid AI response",
+        error: "Invalid AI format",
         raw: text
       });
     }
@@ -88,7 +93,7 @@ ${resumeText.slice(0, 3500)}
 
     try {
       parsed = JSON.parse(match[0]);
-    } catch (e) {
+    } catch {
       return res.status(500).json({
         error: "JSON parse failed",
         raw: text
