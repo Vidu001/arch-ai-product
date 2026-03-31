@@ -48,31 +48,44 @@ async function handleUpload(e) {
 }
 
 async function callAPI(isRefresh) {
-  const res = await fetch('/api/analyze', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({
-      resumeText: lastResumeText,
-      seenJobs: Array.from(seenJobs)
-    })
-  });
+  try {
+    const res = await fetch('/api/analyze', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        resumeText: lastResumeText,
+        seenJobs: Array.from(seenJobs)
+      })
+    });
 
-  const data = await res.json();
+    const data = await res.json();
+    console.log("API response:", data);
 
-  let newJobs = [];
-
-  for (let j of data.jobs) {
-    const key = (j.title + j.company).toLowerCase();
-
-    if (!seenJobs.has(key)) {
-      seenJobs.add(key);
-      newJobs.push(j);
+    // ✅ HANDLE ERROR SAFELY
+    if (!data.jobs || !Array.isArray(data.jobs)) {
+      alert("API Error: " + (data.error || "Unknown error"));
+      return;
     }
+
+    let newJobs = [];
+
+    for (let j of data.jobs) {
+      const key = (j.title + j.company).toLowerCase();
+
+      if (!seenJobs.has(key)) {
+        seenJobs.add(key);
+        newJobs.push(j);
+      }
+    }
+
+    jobs = isRefresh ? [...jobs, ...newJobs] : newJobs;
+
+    render();
+
+  } catch (e) {
+    console.error(e);
+    alert("Something went wrong while fetching jobs");
   }
-
-  jobs = isRefresh ? [...jobs, ...newJobs] : newJobs;
-
-  render();
 }
 
 function render() {
