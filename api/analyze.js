@@ -1,53 +1,70 @@
 export default async function handler(req, res) {
   try {
-    const { resumeText, seenJobs } = req.body;
+    const { resumeText, seenJobs = [] } = req.body || {};
+
+    if (!resumeText) {
+      return res.status(400).json({ error: "Missing resumeText" });
+    }
 
     const prompt = `
+You are an expert career coach.
+
+Based on this resume, suggest 3 NEW job roles (avoid repeating these: ${seenJobs.join(", ")}).
+
 Return ONLY JSON:
 
 {
-  "summary": "1 line",
   "jobs": [
     {
-      "id": 1,
-      "title": "role",
-      "company": "company",
-      "score": 80,
-      "gap": "skill",
-      "strategy": "2 sentences",
-      "keywords": ["a","b"],
-      "latex": "\\\\item bullet",
-      "courseTitle": "course",
-      "courseProvider": "Coursera"
+      "title": "",
+      "company": "",
+      "score": 0,
+      "gap": "",
+      "strategy": "",
+      "courseTitle": "",
+      "latex": ""
     }
   ]
 }
 
-Avoid repeating:
-${(seenJobs || []).join(", ")}
-
 Resume:
-${resumeText.slice(0, 5000)}
+${resumeText.slice(0, 4000)}
 `;
 
-    const r = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
-        headers: {"Content-Type":"application/json"},
+        headers: {
+          "Content-Type": "application/json"
+        },
         body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ]
         })
       }
     );
 
-    const data = await r.json();
-    const raw = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
-    const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)[0]);
+    const data = await response.json();
 
-    res.status(200).json(parsed);
+    const text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text || "";
+
+    const match = text.match(/\{[\s\S]*\}/);
+
+    if (!match) {
+      return res.status(500).json({ error: "Invalid AI response", raw: text });
+    }
+
+    const parsed = JSON.parse(match[0]);
+
+    return res.status(200).json(parsed);
 
   } catch (err) {
-    res.status(500).json({ error: "Failed" });
+    console.error(err);
+    return res.status(500).json({ error: "Failed", details: err.message });
   }
 }
