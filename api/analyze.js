@@ -21,7 +21,7 @@ Suggest EXACTLY 3 NEW job roles.
 
 DO NOT repeat: ${seenJobs.join(", ")}
 
-Return STRICT JSON ONLY. No explanation.
+Return STRICT JSON ONLY.
 
 FORMAT:
 {
@@ -43,7 +43,7 @@ ${resumeText.slice(0, 3000)}
 `;
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash-latest:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: {
@@ -54,18 +54,13 @@ ${resumeText.slice(0, 3000)}
             {
               parts: [{ text: prompt }]
             }
-          ],
-          generationConfig: {
-            temperature: 0.6,
-            maxOutputTokens: 700
-          }
+          ]
         })
       }
     );
 
     const data = await response.json();
 
-    // DEBUG LOG
     console.log("Gemini raw:", JSON.stringify(data));
 
     const text =
