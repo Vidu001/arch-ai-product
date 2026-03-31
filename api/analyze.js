@@ -11,37 +11,17 @@ export default async function handler(req, res) {
     }
 
     if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: "Missing GEMINI_API_KEY" });
+      return res.status(500).json({ error: "Missing GEMINI_API_KEY in Vercel environment variables" });
     }
 
-    const prompt = `
-You are an expert career coach.
+    const systemPrompt = `You are an expert career coach and technical recruiter. 
+    Analyze the user's resume and suggest 3 high-paying career "bridges" (next-step roles).
+    For each role, provide a strategy to pivot, a specific skill gap, and a LaTeX snippet to update their resume.
+    Avoid suggesting these previously seen jobs: ${seenJobs.join(", ")}.`;
 
-Suggest EXACTLY 3 NEW job roles.
+    const userPrompt = `Resume Content: ${resumeText.slice(0, 4000)}`;
 
-DO NOT repeat: ${seenJobs.join(", ")}
-
-Return STRICT JSON ONLY.
-
-FORMAT:
-{
-  "jobs": [
-    {
-      "title": "",
-      "company": "",
-      "score": 85,
-      "gap": "",
-      "strategy": "",
-      "courseTitle": "",
-      "latex": ""
-    }
-  ]
-}
-
-Resume:
-${resumeText.slice(0, 3000)}
-`;
-
+    // Note the model name: gemini-1.5-flash (most stable for standard API keys)
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
       {
@@ -52,56 +32,60 @@ ${resumeText.slice(0, 3000)}
         body: JSON.stringify({
           contents: [
             {
-              parts: [{ text: prompt }]
+              role: "user",
+              parts: [{ text: `${systemPrompt}\n\n${userPrompt}` }]
             }
-          ]
+          ],
+          generationConfig: {
+            responseMimeType: "application/json",
+            responseSchema: {
+              type: "OBJECT",
+              properties: {
+                jobs: {
+                  type: "ARRAY",
+                  items: {
+                    type: "OBJECT",
+                    properties: {
+                      title: { type: "STRING" },
+                      company: { type: "STRING" },
+                      score: { type: "NUMBER" },
+                      gap: { type: "STRING" },
+                      strategy: { type: "STRING" },
+                      courseTitle: { type: "STRING" },
+                      latex: { type: "STRING" }
+                    }
+                  }
+                }
+              }
+            }
+          }
         })
       }
     );
 
     const data = await response.json();
 
-    console.log("Gemini raw:", JSON.stringify(data));
-
-    const text =
-      data?.candidates?.[0]?.content?.parts
-        ?.map(p => p.text || "")
-        .join("") || "";
-
-    if (!text) {
-      return res.status(500).json({
-        error: "Empty Gemini response",
-        raw: data
+    if (!response.ok) {
+      console.error("Gemini API Error Response:", data);
+      return res.status(response.status).json({ 
+        error: "Gemini API Error", 
+        details: data.error?.message || "Unknown error" 
       });
     }
 
-    const match = text.match(/\{[\s\S]*\}/);
+    const textResponse = data?.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!match) {
-      return res.status(500).json({
-        error: "Invalid AI format",
-        raw: text
-      });
+    if (!textResponse) {
+      return res.status(500).json({ error: "Empty response from AI" });
     }
 
-    let parsed;
-
-    try {
-      parsed = JSON.parse(match[0]);
-    } catch {
-      return res.status(500).json({
-        error: "JSON parse failed",
-        raw: text
-      });
-    }
-
+    const parsed = JSON.parse(textResponse);
     return res.status(200).json(parsed);
 
   } catch (err) {
-    console.error("API ERROR:", err);
-
+    console.error("SERVER ERROR:", err);
     return res.status(500).json({
-      error: "Failed",
+      error: "Internal Server Error",
       details: err.message
     });
   }
