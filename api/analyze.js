@@ -11,39 +11,60 @@ export default async function handler(req, res) {
 
     if (!apiKey) return res.status(500).json({ error: "API Key missing in Vercel." });
 
-    // Step 1: Check for model availability
-    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
-    const listRes = await fetch(listUrl);
-    const listData = await listRes.json();
+    // List of model identifiers to try in order of preference
+    const modelCandidates = [
+      "gemini-1.5-flash",
+      "gemini-1.5-flash-latest",
+      "gemini-pro",
+      "models/gemini-1.5-flash",
+      "models/gemini-pro"
+    ];
 
-    if (!listRes.ok) {
-      // THIS IS THE CRITICAL ERROR CATCHER
-      return res.status(listRes.status).json({ 
-        error: "API_DISABLED", 
-        message: "The Generative Language API is not enabled in your Google Cloud Project.",
-        instruction: "1. Click 'Gemini API' in your search screenshot. 2. Click the 'ENABLE' button on the next page."
-      });
+    let successResponse = null;
+    let lastError = null;
+
+    const prompt = `Analyze this resume and return a JSON object with 3 job leads for 2026: ${resumeText.slice(0, 2000)}. 
+    Exclude these roles: ${seenJobs.join(", ")}. 
+    Required JSON structure: {"jobs": [{"title": "...", "company": "...", "score": 95, "gap": "...", "strategy": "...", "courseTitle": "...", "latex": "..."}]}`;
+
+    // Brute force loop through models until one works
+    for (const modelName of modelCandidates) {
+      try {
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName.replace('models/', '')}:generateContent?key=${apiKey}`;
+        
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { responseMimeType: "application/json" }
+          })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
+          successResponse = JSON.parse(data.candidates[0].content.parts[0].text);
+          break; // Stop loop if we get data
+        } else {
+          lastError = data.error?.message || "Model not responsive";
+          console.log(`Failed with ${modelName}: ${lastError}`);
+        }
+      } catch (e) {
+        lastError = e.message;
+      }
     }
 
-    const availableModels = listData.models || [];
-    const targetModel = availableModels.find(m => m.name.includes("gemini-1.5-flash"))?.name || "models/gemini-pro";
+    if (successResponse) {
+      return res.status(200).json(successResponse);
+    }
 
-    // Step 2: Generate Content
-    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/${targetModel}:generateContent?key=${apiKey}`;
-
-    const response = await fetch(generateUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: `Analyze this resume and return a JSON object with 3 job leads: ${resumeText.slice(0, 2000)}. Exclude: ${seenJobs.join(", ")}` }] }],
-        generationConfig: { responseMimeType: "application/json" }
-      })
+    // If all models fail
+    return res.status(500).json({ 
+      error: "Model Negotiation Failed", 
+      details: lastError,
+      suggestion: "Since your API is ENABLED, please check if your API Key is restricted to a specific IP or Bundle ID in Google Cloud Credentials."
     });
-
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error?.message || "Generation failed");
-
-    return res.status(200).json(JSON.parse(data.candidates[0].content.parts[0].text));
 
   } catch (err) {
     return res.status(500).json({ error: "System Error", details: err.message });
