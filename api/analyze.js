@@ -11,13 +11,11 @@ export default async function handler(req, res) {
 
     if (!apiKey) return res.status(500).json({ error: "API Key missing in Vercel." });
 
-    // List of model identifiers to try in order of preference
+    // These are the most stable model strings for the Generative Language API
     const modelCandidates = [
-      "gemini-1.5-flash",
-      "gemini-1.5-flash-latest",
-      "gemini-pro",
-      "models/gemini-1.5-flash",
-      "models/gemini-pro"
+      { ver: 'v1beta', name: 'gemini-1.5-flash' },
+      { ver: 'v1', name: 'gemini-1.5-flash' },
+      { ver: 'v1beta', name: 'gemini-pro' }
     ];
 
     let successResponse = null;
@@ -27,17 +25,20 @@ export default async function handler(req, res) {
     Exclude these roles: ${seenJobs.join(", ")}. 
     Required JSON structure: {"jobs": [{"title": "...", "company": "...", "score": 95, "gap": "...", "strategy": "...", "courseTitle": "...", "latex": "..."}]}`;
 
-    // Brute force loop through models until one works
-    for (const modelName of modelCandidates) {
+    for (const cand of modelCandidates) {
       try {
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName.replace('models/', '')}:generateContent?key=${apiKey}`;
+        // Standard Google AI URL format
+        const url = `https://generativelanguage.googleapis.com/${cand.ver}/models/${cand.name}:generateContent?key=${apiKey}`;
         
         const response = await fetch(url, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: "application/json" }
+            generationConfig: { 
+              responseMimeType: "application/json",
+              temperature: 0.7
+            }
           })
         });
 
@@ -45,10 +46,9 @@ export default async function handler(req, res) {
 
         if (response.ok && data.candidates?.[0]?.content?.parts?.[0]?.text) {
           successResponse = JSON.parse(data.candidates[0].content.parts[0].text);
-          break; // Stop loop if we get data
+          break; 
         } else {
-          lastError = data.error?.message || "Model not responsive";
-          console.log(`Failed with ${modelName}: ${lastError}`);
+          lastError = data.error?.message || "Model rejected request";
         }
       } catch (e) {
         lastError = e.message;
@@ -59,11 +59,10 @@ export default async function handler(req, res) {
       return res.status(200).json(successResponse);
     }
 
-    // If all models fail
     return res.status(500).json({ 
-      error: "Model Negotiation Failed", 
+      error: "Final Model Failure", 
       details: lastError,
-      suggestion: "Since your API is ENABLED, please check if your API Key is restricted to a specific IP or Bundle ID in Google Cloud Credentials."
+      actionRequired: "Check 'API Restrictions' in Google Cloud Console Credentials. Ensure your key is NOT restricted, or specifically allows 'Generative Language API'."
     });
 
   } catch (err) {
