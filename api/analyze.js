@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // 1. CORS Headers (Crucial for Vercel)
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -10,70 +9,43 @@ export default async function handler(req, res) {
     const { resumeText, seenJobs = [] } = req.body || {};
     const apiKey = process.env.GEMINI_API_KEY;
 
-    if (!apiKey) {
-      return res.status(500).json({ error: "Missing API Key. Check Vercel Environment Variables." });
+    if (!apiKey) return res.status(500).json({ error: "API Key missing in Vercel." });
+
+    // Step 1: Check for model availability
+    const listUrl = `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`;
+    const listRes = await fetch(listUrl);
+    const listData = await listRes.json();
+
+    if (!listRes.ok) {
+      // THIS IS THE CRITICAL ERROR CATCHER
+      return res.status(listRes.status).json({ 
+        error: "API_DISABLED", 
+        message: "The Generative Language API is not enabled in your Google Cloud Project.",
+        instruction: "1. Click 'Gemini API' in your search screenshot. 2. Click the 'ENABLE' button on the next page."
+      });
     }
 
-    /**
-     * FOR THE FREE TIER:
-     * Use version 'v1beta' and model 'gemini-1.5-flash'. 
-     * This is the most reliable path for free keys.
-     */
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+    const availableModels = listData.models || [];
+    const targetModel = availableModels.find(m => m.name.includes("gemini-1.5-flash"))?.name || "models/gemini-pro";
 
-    const prompt = `
-      Act as a Career Architect. Analyze this resume: ${resumeText.slice(0, 3000)}
-      Suggest 3 high-revenue roles. Skip these: ${seenJobs.join(", ")}
-      
-      IMPORTANT: Return ONLY a valid JSON object. Do not include markdown code blocks.
-      Structure:
-      {
-        "jobs": [
-          {
-            "title": "Role Name",
-            "company": "Target Company",
-            "score": 92,
-            "gap": "Specific Skill",
-            "strategy": "Actionable advice",
-            "courseTitle": "Course Link Name",
-            "latex": "Resume Snippet"
-          }
-        ]
-      }
-    `;
+    // Step 2: Generate Content
+    const generateUrl = `https://generativelanguage.googleapis.com/v1beta/${targetModel}:generateContent?key=${apiKey}`;
 
-    const response = await fetch(url, {
+    const response = await fetch(generateUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          // Force JSON output mode (Free tier feature)
-          responseMimeType: "application/json"
-        }
+        contents: [{ parts: [{ text: `Analyze this resume and return a JSON object with 3 job leads: ${resumeText.slice(0, 2000)}. Exclude: ${seenJobs.join(", ")}` }] }],
+        generationConfig: { responseMimeType: "application/json" }
       })
     });
 
     const data = await response.json();
+    if (!response.ok) throw new Error(data.error?.message || "Generation failed");
 
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: "Google API Rejection",
-        message: data.error?.message,
-        tip: "Go to Cloud Console, search 'Generative Language API', and click ENABLE."
-      });
-    }
-
-    // Extracting text (Gemini returns JSON inside the text part when responseMimeType is JSON)
-    const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    
-    if (!rawText) {
-      return res.status(500).json({ error: "AI returned empty content." });
-    }
-
-    return res.status(200).json(JSON.parse(rawText));
+    return res.status(200).json(JSON.parse(data.candidates[0].content.parts[0].text));
 
   } catch (err) {
-    return res.status(500).json({ error: "Server Error", details: err.message });
+    return res.status(500).json({ error: "System Error", details: err.message });
   }
 }
