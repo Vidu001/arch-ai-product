@@ -1,6 +1,9 @@
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-// This matches the Vercel Serverless Function signature
+/**
+ * Enhanced Vercel Serverless Function: api/analyze.js
+ * Fixes: 503 (High Demand) with retries, 404 (Model ID), and JSON parsing.
+ */
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
@@ -9,53 +12,69 @@ export default async function handler(req, res) {
   const { resumeText, seenJobs } = req.body;
   const apiKey = process.env.GEMINI_API_KEY;
 
+  if (!resumeText) {
+    return res.status(400).json({ error: "Missing resumeText in request body" });
+  }
+
   if (!apiKey) {
-    return res.status(500).json({ error: "API Key not configured in Vercel environment." });
+    return res.status(500).json({ error: "API Configuration Error: GEMINI_API_KEY missing" });
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash-preview-09-2025" });
+  
+  // Use 'gemini-1.5-flash' - it's stable and has the highest rate limits
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-1.5-flash", 
+    generationConfig: { responseMimeType: "application/json" } 
+  });
 
   const systemPrompt = `
-    You are an expert career strategist. Analyze the provided resume text and return a JSON object.
+    Analyze the resume text and return a valid JSON object.
+    Exclude these titles: ${JSON.stringify(seenJobs || [])}.
     
-    The JSON must follow this exact schema:
+    Structure:
     {
       "candidateName": "String",
       "suggestedRole": "String",
       "skills": ["String"],
-      "jobs": [
-        {
-          "title": "Job Title",
-          "company": "Company Name",
-          "score": number (0-100),
-          "gap": "Comma separated missing skills",
-          "strategy": "One sentence on how to pivot",
-          "latex": "A 3-line LaTeX snippet of a resume 'Professional Summary' tailored for this specific job"
-        }
-      ]
+      "jobs": [{ "title": "String", "company": "String", "score": 85, "gap": "String", "strategy": "String", "latex": "String" }]
     }
-    
-    Generate 3-5 high-quality strategic job matches based on the candidate's background.
-    Exclude any jobs with titles in this list: ${JSON.stringify(seenJobs)}
   `;
 
-  try {
-    const result = await model.generateContent([
-      { text: systemPrompt },
-      { text: `Resume Content: ${resumeText}` }
-    ]);
+  // --- RETRY LOGIC FOR 503 ERRORS ---
+  let attempts = 0;
+  const maxAttempts = 3;
 
-    const response = await result.response;
-    let text = response.text();
-    
-    // Clean potential markdown code blocks from the response
-    text = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    
-    const data = JSON.parse(text);
-    res.status(200).json(data);
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    res.status(500).json({ error: "Failed to analyze resume", details: error.message });
+  while (attempts < maxAttempts) {
+    try {
+      const result = await model.generateContent([
+        { text: systemPrompt },
+        { text: `Resume Content: ${resumeText}` }
+      ]);
+
+      const response = await result.response;
+      const text = response.text();
+      
+      // Because we set responseMimeType, we can safely parse
+      return res.status(200).json(JSON.parse(text));
+
+    } catch (error) {
+      attempts++;
+      const isRateLimit = error.message?.includes("503") || error.message?.includes("high demand");
+      
+      if (isRateLimit && attempts < maxAttempts) {
+        // Wait 2 seconds before retrying to let the "spike" settle
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        continue; 
+      }
+
+      // If it's not a retryable error or we ran out of attempts
+      console.error("Gemini API Final Failure:", error);
+      return res.status(error.status || 500).json({ 
+        error: "Analysis Failed", 
+        details: error.message,
+        suggestion: isRateLimit ? "Service is currently overloaded. Please try again in a minute." : "Check model name and API key."
+      });
+    }
   }
 }
