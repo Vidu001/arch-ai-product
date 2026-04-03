@@ -1,5 +1,19 @@
 {
-  "name": "archai-live",
-  "version": "1.0.0",
-  "type": "module"
+"name": "arch-ai-product",
+"version": "1.0.0",
+"description": "Strategic Career Command Center powered by Gemini",
+"main": "index.html",
+"dependencies": {
+"@google/generative-ai": "^0.1.0"
+},
+"devDependencies": {},
+"scripts": {
+"start": "vercel dev",
+"deploy": "vercel"
+},
+"engines": {
+"node": "18.x"
+},
+"author": "",
+"license": "ISC"
 }
