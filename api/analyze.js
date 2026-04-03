@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  // CORS Headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -11,15 +12,15 @@ export default async function handler(req, res) {
 
     if (!apiKey) return res.status(500).json({ error: "API Key missing in Vercel settings." });
 
-    // This is the most stable model name and version for new Google Cloud Projects
-    const MODEL_NAME = "gemini-1.5-flash"; 
+    // Based on your successful CURL test:
+    // The specific model name recognized by your Google Cloud Project is 'gemini-flash-latest'
+    const MODEL_NAME = "gemini-flash-latest"; 
     const API_VERSION = "v1beta";
 
-    // Standard URL format: the "models/" prefix is REQUIRED inside the path
     const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
-    const prompt = `Return a JSON object with 3 job suggestions for this resume: ${resumeText.slice(0, 2000)}. 
-    Exclude: ${seenJobs.join(", ")}. 
+    const prompt = `Return a JSON object with 3 job suggestions for this resume: ${resumeText.slice(0, 2500)}. 
+    Exclude these jobs already seen: ${seenJobs.join(", ")}. 
     Format: {"jobs": [{"title": "...", "company": "...", "score": 90, "gap": "...", "strategy": "...", "courseTitle": "...", "latex": "..."}]}`;
 
     const response = await fetch(url, {
@@ -37,20 +38,30 @@ export default async function handler(req, res) {
     const data = await response.json();
 
     if (!response.ok) {
-      // If this fails, it's definitely a Key restriction issue
       return res.status(response.status).json({ 
         error: "Google_API_Error", 
-        message: data.error?.message,
-        tip: "Go to Google Cloud > Credentials > Click your API Key > Set 'API Restrictions' to 'None' or add 'Generative Language API'."
+        message: data.error?.message || "Unknown error from Google API",
+        debug_model: MODEL_NAME
       });
     }
 
+    // Extracting the text response
     const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!resultText) throw new Error("No content returned from Gemini");
+    
+    if (!resultText) {
+      throw new Error("No text content returned from Gemini. Check API quotas or safety filters.");
+    }
 
-    return res.status(200).json(JSON.parse(resultText));
+    // Parse the JSON returned by the model
+    const parsedData = JSON.parse(resultText);
+
+    return res.status(200).json(parsedData);
 
   } catch (err) {
-    return res.status(500).json({ error: "Server Error", details: err.message });
+    console.error("Analysis Error:", err);
+    return res.status(500).json({ 
+      error: "Server Error", 
+      details: err.message 
+    });
   }
 }
