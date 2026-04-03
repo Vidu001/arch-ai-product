@@ -21,12 +21,16 @@ export default async function handler(req, res) {
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
+
   
-  // Use 'gemini-1.5-flash' - it's stable and has the highest rate limits
+
   const model = genAI.getGenerativeModel({ 
-    model: "gemini-1.5-flash", 
-    generationConfig: { responseMimeType: "application/json" } 
-  });
+  model: "gemini-1.5-flash-latest",
+    generationConfig: { responseMimeType: "application/json" // Using -latest ensures you hit the current active version
+});
+  const modelList = await genAI.listModels();
+console.log("Available models:", JSON.stringify(modelList, null, 2));
+
 
   const systemPrompt = `
     Analyze the resume text and return a valid JSON object.
