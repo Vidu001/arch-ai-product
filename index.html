@@ -1,133 +1,217 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
-
-<style>
-body{font-family:system-ui;background:#0f172a;color:#fff;padding:20px}
-button{padding:8px 12px;margin:5px;border-radius:6px;border:none;cursor:pointer}
-.card{background:#1e293b;padding:15px;margin:10px 0;border-radius:10px}
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ArchAI Live | Career Engineering Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+        
+        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0f172a; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .premium-gradient { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
+        .loader-spin { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        
+        .job-card:hover { transform: translateY(-2px); border-color: rgba(99, 102, 241, 0.5); }
+    </style>
 </head>
+<body class="text-slate-200 min-h-screen pb-20">
 
-<body>
+    <!-- Header -->
+    <nav class="border-b border-slate-800 bg-slate-900/50 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto px-6 h-20 flex items-center justify-between">
+            <div class="flex items-center gap-3">
+                <div class="premium-gradient p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
+                    <i class="fas fa-archway text-white text-xl"></i>
+                </div>
+                <h1 class="text-2xl font-extrabold tracking-tighter text-white">Arch<span class="text-indigo-400">AI</span> <span class="text-slate-500 font-medium text-lg ml-1">Live</span></h1>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="reanalyze()" class="hidden sm:flex items-center gap-2 px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-sm font-semibold transition-all">
+                    <i class="fas fa-sync-alt text-xs"></i> Refresh
+                </button>
+                <button onclick="downloadLatex()" class="flex items-center gap-2 px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold transition-all shadow-lg shadow-indigo-500/20">
+                    <i class="fas fa-file-export text-xs"></i> Export .tex
+                </button>
+            </div>
+        </div>
+    </nav>
 
-<h2>⚡ ArchAI Live</h2>
-  
+    <main class="max-w-6xl mx-auto px-6 mt-12">
+        <!-- Hero / Upload Section -->
+        <section id="uploadSection" class="text-center mb-16">
+            <h2 class="text-4xl sm:text-5xl font-extrabold text-white mb-6 tracking-tight">Your next move, <span class="text-indigo-400">engineered.</span></h2>
+            <p class="text-slate-400 max-w-2xl mx-auto text-lg mb-10 leading-relaxed">Upload your resume to see high-intent job matches, skill gap analysis, and tailored LaTeX snippets in real-time.</p>
+            
+            <div class="max-w-xl mx-auto relative group">
+                <div class="absolute -inset-1 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-2xl blur opacity-25 group-hover:opacity-50 transition duration-1000"></div>
+                <label class="relative block glass p-10 rounded-2xl border-2 border-dashed border-slate-700 hover:border-indigo-500 cursor-pointer transition-all group">
+                    <input type="file" accept=".pdf" class="hidden" onchange="handleUpload(event)">
+                    <div id="uploadPrompt" class="space-y-4">
+                        <i class="fas fa-cloud-upload-alt text-4xl text-indigo-400 group-hover:scale-110 transition-transform duration-300"></i>
+                        <p class="text-xl font-bold text-white">Drop your PDF here</p>
+                        <p class="text-sm text-slate-500">Max file size 5MB • Direct PDF Analysis</p>
+                    </div>
+                    <div id="loadingIndicator" class="hidden space-y-4 py-4">
+                        <i class="fas fa-circle-notch loader-spin text-4xl text-indigo-500"></i>
+                        <p class="font-bold text-slate-300">Analyzing Experience Stack...</p>
+                    </div>
+                </label>
+            </div>
+        </section>
 
-<input type="file" accept=".pdf" onchange="handleUpload(event)">
-<button onclick="reanalyze()">Refresh Jobs ↻</button>
-<button onclick="downloadLatex()">Export Resume ↓</button>
+        <!-- Dynamic Results Grid -->
+        <div id="output" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <!-- Job cards will appear here -->
+        </div>
 
-<div id="output"></div>
+        <!-- Empty State -->
+        <div id="emptyState" class="text-center py-20 opacity-50">
+            <i class="fas fa-briefcase text-6xl mb-4 text-slate-700"></i>
+            <p class="text-slate-500 font-medium">No analysis performed yet.</p>
+        </div>
+    </main>
 
-<script>
-pdfjsLib.GlobalWorkerOptions.workerSrc =
-'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
-let jobs = [];
-let seenJobs = new Set();
-let lastResumeText = '';
+        let jobs = [];
+        let seenJobs = new Set();
+        let lastResumeText = '';
 
-async function handleUpload(e) {
-  const file = e.target.files[0];
-  const buf = await file.arrayBuffer();
-  const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+        async function handleUpload(e) {
+            const file = e.target.files[0];
+            if (!file) return;
 
-  let text = '';
-  for (let i = 1; i <= pdf.numPages; i++) {
-    const pg = await pdf.getPage(i);
-    const ct = await pg.getTextContent();
-    text += ct.items.map(x => x.str).join(' ');
-  }
+            // UI Feedback
+            document.getElementById('uploadPrompt').classList.add('hidden');
+            document.getElementById('loadingIndicator').classList.remove('hidden');
+            document.getElementById('emptyState').classList.add('hidden');
 
-  lastResumeText = text;
-  callAPI(false);
-}
+            try {
+                const buf = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({data: buf}).promise;
 
-async function callAPI(isRefresh) {
-  try {
-    const res = await fetch('/api/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        resumeText: lastResumeText,
-        seenJobs: Array.from(seenJobs)
-      })
-    });
+                let text = '';
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const pg = await pdf.getPage(i);
+                    const ct = await pg.getTextContent();
+                    text += ct.items.map(x => x.str).join(' ');
+                }
 
-    const data = await res.json();
-    console.log("API response:", data);
+                lastResumeText = text;
+                await callAPI(false);
+            } catch (err) {
+                console.error(err);
+                alert("Error reading PDF");
+            } finally {
+                document.getElementById('uploadPrompt').classList.remove('hidden');
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        }
 
-    // ✅ HANDLE ERROR SAFELY
-    if (!data.jobs || !Array.isArray(data.jobs)) {
-      alert("API Error: " + (data.error || "Unknown error"));
-      return;
-    }
+        async function callAPI(isRefresh) {
+            try {
+                const res = await fetch('/api/analyze', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        resumeText: lastResumeText,
+                        seenJobs: Array.from(seenJobs)
+                    })
+                });
 
-    let newJobs = [];
+                const data = await res.json();
+                if (!data.jobs) {
+                    alert("API Error: " + (data.error || "Service unavailable"));
+                    return;
+                }
 
-    for (let j of data.jobs) {
-      const key = (j.title + j.company).toLowerCase();
+                let newJobs = [];
+                for (let j of data.jobs) {
+                    const key = (j.title + j.company).toLowerCase();
+                    if (!seenJobs.has(key)) {
+                        seenJobs.add(key);
+                        newJobs.push(j);
+                    }
+                }
 
-      if (!seenJobs.has(key)) {
-        seenJobs.add(key);
-        newJobs.push(j);
-      }
-    }
+                jobs = isRefresh ? [...newJobs, ...jobs] : newJobs;
+                render();
+            } catch (e) {
+                console.error(e);
+                alert("Network error. Please try again.");
+            }
+        }
 
-    jobs = isRefresh ? [...jobs, ...newJobs] : newJobs;
+        function render() {
+            const out = document.getElementById('output');
+            out.innerHTML = jobs.map(j => `
+                <div class="glass p-6 rounded-2xl border border-slate-700/50 job-card transition-all duration-300 flex flex-col justify-between">
+                    <div>
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="px-2 py-1 rounded-md bg-indigo-500/10 text-indigo-400 text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">
+                                Match ${j.score}%
+                            </span>
+                            <i class="fas fa-bolt text-amber-500 text-sm"></i>
+                        </div>
+                        
+                        <h3 class="text-xl font-bold text-white leading-tight mb-1">${j.title}</h3>
+                        <p class="text-indigo-400 font-semibold text-sm mb-4">${j.company}</p>
+                        
+                        <div class="space-y-4 mb-6">
+                            <div>
+                                <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Critical Gap</h4>
+                                <p class="text-sm text-rose-400 font-medium">${j.gap}</p>
+                            </div>
+                            <div>
+                                <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1">Strategy</h4>
+                                <p class="text-xs text-slate-400 leading-relaxed">${j.strategy}</p>
+                            </div>
+                            <div class="p-3 bg-slate-800/50 rounded-xl border border-slate-700/50">
+                                <h4 class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 italic">Bridge Course</h4>
+                                <p class="text-xs text-white font-bold">${j.courseTitle}</p>
+                            </div>
+                        </div>
+                    </div>
 
-    render();
+                    <button onclick="applyJob('${j.title}','${j.company}')" 
+                        class="w-full py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-sm transition-all border border-slate-700">
+                        View Leads on LinkedIn
+                    </button>
+                </div>
+            `).join('');
+        }
 
-  } catch (e) {
-    console.error(e);
-    alert("Something went wrong while fetching jobs");
-  }
-}
+        function applyJob(title, company) {
+            const q = encodeURIComponent(title + " " + company);
+            window.open(`https://www.linkedin.com/jobs/search/?keywords=${q}`, "_blank");
+        }
 
-function render() {
-  const out = document.getElementById('output');
+        function reanalyze() {
+            if (!lastResumeText) return;
+            callAPI(true);
+        }
 
-  out.innerHTML = jobs.map(j => `
-    <div class="card">
-      <h3>${j.title} @ ${j.company}</h3>
-      <p>Score: ${j.score}</p>
-      <p>Gap: ${j.gap}</p>
-      <p>${j.strategy}</p>
-
-      <p><b>Course:</b> ${j.courseTitle}</p>
-      <button onclick="applyJob('${j.title}','${j.company}')">Apply</button>
-    </div>
-  `).join('');
-}
-
-function applyJob(title, company) {
-  const q = encodeURIComponent(title + " " + company);
-  window.open(`https://www.linkedin.com/jobs/search/?keywords=${q}`, "_blank");
-}
-
-function reanalyze() {
-  if (!lastResumeText) return;
-  callAPI(true);
-}
-
-function downloadLatex() {
-  const content = `
-\\documentclass{article}
+        function downloadLatex() {
+            if (!jobs.length) return alert("Analyze a resume first!");
+            const content = `\\documentclass{article}
+\\usepackage[utf8]{inputenc}
 \\begin{document}
-${jobs.map(j => j.latex).join('\n')}
+\\section*{Strategic Resume Realignment}
+${jobs.map(j => `% Job: ${j.title} at ${j.company}\n${j.latex}`).join('\n\n')}
 \\end{document}`;
 
-  const blob = new Blob([content], { type: 'text/plain' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'resume.tex';
-  a.click();
-}
-</script>
-
+            const blob = new Blob([content], { type: 'text/plain' });
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = 'archai_realignment.tex';
+            a.click();
+        }
+    </script>
 </body>
 </html>
