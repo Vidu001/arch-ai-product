@@ -1,84 +1,61 @@
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
-/**
- * Enhanced Vercel Serverless Function: api/analyze.js
- * Fixes: 503 (High Demand) with retries, 404 (Model ID), and JSON parsing.
- */
 export default async function handler(req, res) {
+  // 1. Method Guard
   if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
+    return res.status(405).json({ error: 'Method not allowed' });
   }
 
   const { resumeText, seenJobs } = req.body;
   const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!resumeText) {
-    return res.status(400).json({ error: "Missing resumeText in request body" });
-  }
-
+  // 2. Critical Check: Environment Variables
   if (!apiKey) {
-    return res.status(500).json({ error: "API Configuration Error: GEMINI_API_KEY missing" });
+    console.error("CRITICAL: GEMINI_API_KEY is missing from environment variables.");
+    return res.status(500).json({ error: "Server Configuration Error" });
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-
-  
-
-  const model = genAI.getGenerativeModel({ 
-  model: "gemini-1.5-flash-latest",
-    generationConfig: { responseMimeType: "application/json" // Using -latest ensures you hit the current active version
-});
-  const modelList = await genAI.listModels();
-console.log("Available models:", JSON.stringify(modelList, null, 2));
-
-
-  const systemPrompt = `
-    Analyze the resume text and return a valid JSON object.
-    Exclude these titles: ${JSON.stringify(seenJobs || [])}.
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
     
-    Structure:
-    {
-      "candidateName": "String",
-      "suggestedRole": "String",
-      "skills": ["String"],
-      "jobs": [{ "title": "String", "company": "String", "score": 85, "gap": "String", "strategy": "String", "latex": "String" }]
-    }
-  `;
+    // 3. Robust Model Initialization
+    // Using 1.5-flash as it is the most stable across all regions
+    const model = genAI.getGenerativeModel({ 
+      model: "gemini-1.5-flash"
+    });
 
-  // --- RETRY LOGIC FOR 503 ERRORS ---
-  let attempts = 0;
-  const maxAttempts = 3;
-
-  while (attempts < maxAttempts) {
-    try {
-      const result = await model.generateContent([
-        { text: systemPrompt },
-        { text: `Resume Content: ${resumeText}` }
-      ]);
-
-      const response = await result.response;
-      const text = response.text();
-      
-      // Because we set responseMimeType, we can safely parse
-      return res.status(200).json(JSON.parse(text));
-
-    } catch (error) {
-      attempts++;
-      const isRateLimit = error.message?.includes("503") || error.message?.includes("high demand");
-      
-      if (isRateLimit && attempts < maxAttempts) {
-        // Wait 2 seconds before retrying to let the "spike" settle
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        continue; 
+    const systemPrompt = `
+      Analyze the resume text and return a valid JSON object.
+      Exclude these titles: ${JSON.stringify(seenJobs || [])}.
+      Return ONLY raw JSON in this format:
+      {
+        "candidateName": "String",
+        "suggestedRole": "String",
+        "skills": ["String"],
+        "jobs": []
       }
+    `;
 
-      // If it's not a retryable error or we ran out of attempts
-      console.error("Gemini API Final Failure:", error);
-      return res.status(error.status || 500).json({ 
-        error: "Analysis Failed", 
-        details: error.message,
-        suggestion: isRateLimit ? "Service is currently overloaded. Please try again in a minute." : "Check model name and API key."
-      });
-    }
+    // 4. Execution
+    const result = await model.generateContent([
+      { text: systemPrompt },
+      { text: `Resume Content: ${resumeText}` }
+    ]);
+
+    const response = await result.response;
+    let text = response.text();
+    
+    // 5. Defensive JSON Parsing (Strips markdown backticks if present)
+    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
+    const data = JSON.parse(cleanJson);
+
+    return res.status(200).json(data);
+
+  } catch (error) {
+    console.error("Function Crash Details:", error);
+    return res.status(500).json({ 
+      error: "Invocation Failed", 
+      details: error.message 
+    });
   }
 }
