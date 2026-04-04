@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
 export default async function handler(req, res) {
-  // 1. Method Guard
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -9,29 +8,27 @@ export default async function handler(req, res) {
   const { resumeText, seenJobs } = req.body;
   const apiKey = process.env.GEMINI_API_KEY;
 
-  // 2. Critical Check: Environment Variables
   if (!apiKey) {
-    console.error("CRITICAL: GEMINI_API_KEY is missing from environment variables.");
     return res.status(500).json({ error: "Server Configuration Error" });
   }
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 3. Robust Model Initialization (Syntax Fixed)
+    // We remove the generationConfig block that caused the 400 error
     const model = genAI.getGenerativeModel(
-      { 
-        model: "gemini-1.5-flash",
-        // Enforce native JSON output directly from the API
-        generationConfig: { responseMimeType: "application/json" } 
-      },
-      { apiVersion: "v1" } // Passed correctly as the second argument
+      { model: "gemini-1.5-flash" },
+      { apiVersion: "v1" }
     );
 
     const systemPrompt = `
       Analyze the resume text and return a valid JSON object.
       Exclude these titles: ${JSON.stringify(seenJobs || [])}.
-      Return ONLY raw JSON in this format:
+      
+      IMPORTANT: Return ONLY the JSON object. Do not include any markdown formatting, 
+      backticks, or explanations. 
+      
+      Format:
       {
         "candidateName": "String",
         "suggestedRole": "String",
@@ -40,17 +37,26 @@ export default async function handler(req, res) {
       }
     `;
 
-    // 4. Execution
     const result = await model.generateContent([
       { text: systemPrompt },
       { text: `Resume Content: ${resumeText}` }
     ]);
 
     const response = await result.response;
-    const text = response.text();
+    let text = response.text();
     
-    // 5. Clean Parsing (Regex removed because native JSON is enforced)
-    const data = JSON.parse(text);
+    // STRONGER CLEANUP: 
+    // This finds the first '{' and last '}' to extract only the JSON part
+    // in case the model adds conversational text or backticks.
+    const startIdx = text.indexOf('{');
+    const endIdx = text.lastIndexOf('}');
+    
+    if (startIdx === -1 || endIdx === -1) {
+      throw new Error("Model failed to generate a valid JSON block.");
+    }
+    
+    const cleanJson = text.substring(startIdx, endIdx + 1);
+    const data = JSON.parse(cleanJson);
 
     return res.status(200).json(data);
 
