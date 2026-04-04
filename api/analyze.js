@@ -15,24 +15,33 @@ export default async function handler(req, res) {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // We remove the generationConfig block that caused the 400 error
+    // FIX: Corrected syntax and model string
     const model = genAI.getGenerativeModel(
-       model: "gemini-2.5-flash" 
+      { model: "gemini-1.5-flash" },
+      { apiVersion: "v1" }
     );
 
     const systemPrompt = `
       Analyze the resume text and return a valid JSON object.
       Exclude these titles: ${JSON.stringify(seenJobs || [])}.
       
-      IMPORTANT: Return ONLY the JSON object. Do not include any markdown formatting, 
-      backticks, or explanations. 
+      IMPORTANT: Return ONLY the JSON object. Do not include markdown or backticks.
       
       Format:
       {
         "candidateName": "String",
         "suggestedRole": "String",
         "skills": ["String"],
-        "jobs": []
+        "jobs": [
+          {
+            "title": "String",
+            "company": "String",
+            "score": number,
+            "gap": "String",
+            "strategy": "String",
+            "latex": "String"
+          }
+        ]
       }
     `;
 
@@ -44,9 +53,7 @@ export default async function handler(req, res) {
     const response = await result.response;
     let text = response.text();
     
-    // STRONGER CLEANUP: 
-    // This finds the first '{' and last '}' to extract only the JSON part
-    // in case the model adds conversational text or backticks.
+    // Extract JSON safely
     const startIdx = text.indexOf('{');
     const endIdx = text.lastIndexOf('}');
     
