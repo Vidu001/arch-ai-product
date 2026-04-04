@@ -17,8 +17,7 @@ export default async function handler(req, res) {
     
     // We remove the generationConfig block that caused the 400 error
     const model = genAI.getGenerativeModel(
-      { model: "gemini-1.5-flash" },
-      { apiVersion: "v1" }
+       model: "gemini-2.5-flash" 
     );
 
     const systemPrompt = `
