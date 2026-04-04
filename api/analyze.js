@@ -16,21 +16,30 @@ export default async function handler(req, res) {
   }
 
   try {
-    const prompt = `
-You are an AI career assistant.
+    const systemPrompt = `
+You are an elite career strategist AI.
 
-Analyze the resume and return STRICT JSON.
+Analyze the resume and generate HIGH-QUALITY structured job matches.
 
-RULES:
-- Only JSON
-- No markdown
-- No explanation
-- Avoid jobs already seen
+IMPORTANT RULES:
+- No generic answers
+- No placeholders
+- Be specific to skills and roles
+- Return ONLY valid JSON
 
-Seen jobs:
-${JSON.stringify(seenJobs || [])}
+For each job:
+1. Identify REAL SKILL GAPS (technologies, tools, concepts)
+2. Separate:
+   - skills_missing (not in resume)
+   - skills_can_add (can be framed from existing experience)
+3. Recommend YouTube learning resources (search-style titles)
+4. Generate STRONG resume bullet points (LaTeX-ready)
+5. Give a short bridge strategy
 
-FORMAT:
+Avoid repeating previous jobs: ${JSON.stringify(seenJobs || [])}
+
+Return EXACT format:
+
 {
   "candidateName": "string",
   "suggestedRole": "string",
@@ -40,16 +49,25 @@ FORMAT:
       "title": "string",
       "company": "string",
       "score": number,
-      "gap": "string",
-      "strategy": "string",
-      "courseTitle": "string",
-      "latex": "string"
+
+      "skills_missing": ["string"],
+      "skills_can_add": ["string"],
+
+      "gap": "comma separated important missing skills",
+
+      "strategy": "2-3 line sharp career advice",
+
+      "courses": [
+        {
+          "title": "YouTube course title",
+          "query": "search query"
+        }
+      ],
+
+      "latex": "Improved resume bullet in LaTeX format"
     }
   ]
 }
-
-Resume:
-${resumeText}
 `;
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
@@ -57,7 +75,7 @@ ${resumeText}
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://your-app.vercel.app",
+        "HTTP-Referer": "https://arch-ai-product.vercel.app",
         "X-Title": "ArchAI"
       },
       body: JSON.stringify({
