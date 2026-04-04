@@ -9,10 +9,10 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing resumeText" });
   }
 
-  const apiKey = process.env.OPENAI_API_KEY;
+  const apiKey = process.env.OPENROUTER_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: "Missing OpenAI API Key" });
+    return res.status(500).json({ error: "Missing OpenRouter API Key" });
   }
 
   try {
@@ -21,16 +21,16 @@ You are an AI career assistant.
 
 Analyze the resume and return STRICT JSON.
 
-Rules:
+RULES:
+- Only JSON
 - No markdown
 - No explanation
-- Only JSON
-- Avoid duplicate jobs already seen
+- Avoid jobs already seen
 
 Seen jobs:
 ${JSON.stringify(seenJobs || [])}
 
-Format:
+FORMAT:
 {
   "candidateName": "string",
   "suggestedRole": "string",
@@ -52,17 +52,25 @@ Resume:
 ${resumeText}
 `;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
+        "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`
+        "HTTP-Referer": "https://your-app.vercel.app",
+        "X-Title": "ArchAI"
       },
       body: JSON.stringify({
-        model: "gpt-4o-mini",
+        model: "deepseek/deepseek-chat",
         messages: [
-          { role: "system", content: "You output only valid JSON." },
-          { role: "user", content: prompt }
+          {
+            role: "system",
+            content: "You are a strict JSON generator. Output ONLY valid JSON."
+          },
+          {
+            role: "user",
+            content: prompt
+          }
         ],
         temperature: 0.7
       })
@@ -72,20 +80,20 @@ ${resumeText}
 
     if (!data.choices || !data.choices.length) {
       return res.status(500).json({
-        error: "Empty OpenAI response",
+        error: "Empty OpenRouter response",
         raw: data
       });
     }
 
     let text = data.choices[0].message.content;
 
-    // Extract JSON safely
+    // Clean JSON extraction
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
 
     if (start === -1 || end === -1) {
       return res.status(500).json({
-        error: "Invalid JSON from AI",
+        error: "Invalid JSON format from AI",
         raw: text
       });
     }
