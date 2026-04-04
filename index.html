@@ -1,81 +1,81 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ArchAI | Strategic Career Command Center</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+<title>ArchAI</title>
 
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
 
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #020617; }
-        .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
-        .premium-gradient { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
-
-        .loader-spin { animation: spin 1s linear infinite; }
-        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-    </style>
+<style>
+body { background:#020617; font-family:sans-serif; }
+.glass {
+    background: rgba(15,23,42,0.8);
+    backdrop-filter: blur(12px);
+    border:1px solid rgba(255,255,255,0.08);
+}
+</style>
 </head>
 
-<body class="text-slate-300 min-h-screen pb-12">
+<body class="text-slate-300">
 
-<!-- Navbar -->
-<nav class="border-b border-slate-800/60 bg-slate-950/50 backdrop-blur-xl sticky top-0 z-[100]">
-    <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-        <h1 class="text-2xl font-black text-white">Arch<span class="text-indigo-400">AI</span></h1>
+<!-- NAV -->
+<div class="p-6 border-b border-slate-800 flex justify-between">
+    <h1 class="text-xl font-bold text-white">Arch<span class="text-indigo-400">AI</span></h1>
+    <div id="apiIndicator">Idle</div>
+</div>
 
-        <div id="apiIndicator" class="text-xs text-slate-400">Idle</div>
-    </div>
-</nav>
-
-<main class="max-w-7xl mx-auto px-6 py-12 grid lg:grid-cols-12 gap-8">
+<!-- MAIN -->
+<div class="max-w-6xl mx-auto grid lg:grid-cols-12 gap-6 p-6">
 
 <!-- LEFT -->
 <div class="lg:col-span-4 space-y-6">
-    <div class="glass p-6 rounded-2xl">
-        <input type="file" id="resumeInput" accept=".pdf" onchange="handleResume(event)">
-        <p id="uploadText">Upload Resume</p>
-    </div>
 
-    <div id="actualProfile" class="hidden">
-        <h3 id="userName"></h3>
-        <p id="userRole"></p>
-        <div id="userSkills"></div>
-    </div>
+<div class="glass p-6 rounded-xl">
+<input type="file" onchange="handleResume(event)">
+<p id="uploadText">Upload Resume</p>
+</div>
+
+<div id="actualProfile" class="hidden glass p-6 rounded-xl">
+<h3 id="userName" class="text-lg font-bold text-white"></h3>
+<p id="userRole" class="text-indigo-400 mb-3"></p>
+
+<div id="userSkills" class="flex flex-wrap gap-2"></div>
+</div>
+
 </div>
 
 <!-- RIGHT -->
-<div class="lg:col-span-8">
-    <div id="jobFeed"></div>
-</div>
+<div class="lg:col-span-8 space-y-4" id="jobFeed"></div>
 
-</main>
+</div>
 
 <!-- MODAL -->
 <div id="detailModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center">
 
-<div class="glass p-6 w-[800px]">
+<div class="glass p-6 w-[900px] max-h-[90vh] overflow-y-auto rounded-xl">
 
-<h2 id="mTitle"></h2>
-<p id="mCompany"></p>
+<h2 id="mTitle" class="text-xl font-bold text-white"></h2>
+<p id="mCompany" class="text-indigo-400 mb-4"></p>
 
-<h4>Strategy</h4>
+<h4 class="font-bold mt-4">Strategy</h4>
 <p id="mStrategy"></p>
 
-<h4>Skill Gaps</h4>
-<div id="mGaps"></div>
+<h4 class="font-bold mt-4">Skill Gaps</h4>
+<div id="mGaps" class="flex flex-wrap gap-2"></div>
 
-<h4>Learning Path</h4>
-<div id="mCourses"></div>
+<h4 class="font-bold mt-4">Learning Path</h4>
+<div id="mCourses" class="space-y-2"></div>
 
-<h4>LaTeX Resume</h4>
-<pre id="mLatex"></pre>
+<h4 class="font-bold mt-4">Resume Fix (LaTeX)</h4>
+<pre id="mLatex" class="text-xs bg-black/40 p-3 rounded"></pre>
 
-<button onclick="closeModal()">Close</button>
+<button onclick="closeModal()" class="mt-6 bg-indigo-500 px-4 py-2 rounded">
+Close
+</button>
 
 </div>
 </div>
@@ -85,124 +85,107 @@ pdfjsLib.GlobalWorkerOptions.workerSrc =
 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
 
 let jobs = [];
-let seenKeys = new Set();
 let lastResumeText = '';
 
-async function handleResume(e) {
-    const file = e.target.files[0];
-    if (!file) return;
+async function handleResume(e){
+const file = e.target.files[0];
+if(!file) return;
 
-    document.getElementById('uploadText').innerText = "Analyzing...";
+document.getElementById('uploadText').innerText="Analyzing...";
 
-    try {
-        const buf = await file.arrayBuffer();
-        const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+const buf = await file.arrayBuffer();
+const pdf = await pdfjsLib.getDocument({data:buf}).promise;
 
-        let text = '';
-        for (let i = 1; i <= pdf.numPages; i++) {
-            const pg = await pdf.getPage(i);
-            const ct = await pg.getTextContent();
-            text += ct.items.map(x => x.str).join(' ');
-        }
-
-        lastResumeText = text;
-        await triggerAnalysis();
-
-    } catch (err) {
-        console.error(err);
-        alert("PDF parsing failed");
-    }
+let text='';
+for(let i=1;i<=pdf.numPages;i++){
+const pg = await pdf.getPage(i);
+const ct = await pg.getTextContent();
+text += ct.items.map(x=>x.str).join(' ');
 }
 
-async function triggerAnalysis() {
-    try {
-        const res = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                resumeText: lastResumeText,
-                seenJobs: Array.from(seenKeys)
-            })
-        });
-
-        const data = await res.json();
-        console.log("API RESPONSE:", data);
-
-        // ✅ STRONG VALIDATION
-        if (data.error) throw new Error(data.error);
-        if (!Array.isArray(data.jobs)) throw new Error("Invalid jobs array");
-
-        updateSidebar(data);
-
-        jobs = data.jobs;
-        renderJobs();
-
-    } catch (err) {
-        console.error(err);
-        document.getElementById('apiIndicator').innerText = "Error";
-    }
+lastResumeText=text;
+await triggerAnalysis();
 }
 
-function updateSidebar(data) {
-    document.getElementById('actualProfile').classList.remove('hidden');
+async function triggerAnalysis(){
+const res = await fetch('/api/analyze',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({resumeText:lastResumeText})
+});
 
-    document.getElementById('userName').innerText =
-        data.candidateName || "Candidate";
+const data = await res.json();
 
-    document.getElementById('userRole').innerText =
-        data.suggestedRole || "Role";
+if(data.error) throw new Error(data.error);
+if(!Array.isArray(data.jobs)) throw new Error("Invalid jobs");
 
-    document.getElementById('userSkills').innerHTML =
-        (data.skills || []).map(s => `<span>${s}</span>`).join('');
+updateSidebar(data);
+
+jobs=data.jobs;
+renderJobs();
 }
 
-function renderJobs() {
-    const feed = document.getElementById('jobFeed');
+function updateSidebar(data){
+document.getElementById('actualProfile').classList.remove('hidden');
 
-    feed.innerHTML = jobs.map((j, idx) => `
-        <div onclick="openDetails(${idx})" class="border p-4 cursor-pointer">
-            <h3>${j.title || "Unknown Role"}</h3>
-            <p>${j.company || "Unknown Company"}</p>
-            <p>${(j.skills_missing || []).slice(0,2).join(', ')}</p>
-        </div>
-    `).join('');
+document.getElementById('userName').innerText =
+data.candidateName || "Candidate";
+
+document.getElementById('userRole').innerText =
+data.suggestedRole || "Role";
+
+document.getElementById('userSkills').innerHTML =
+(data.skills||[]).map(s=>`
+<span class="px-2 py-1 bg-slate-800 rounded text-xs">${s}</span>
+`).join('');
 }
 
-function openDetails(idx) {
-    const j = jobs[idx];
+function renderJobs(){
+const feed=document.getElementById('jobFeed');
 
-    document.getElementById('mTitle').innerText = j.title || "";
-    document.getElementById('mCompany').innerText = j.company || "";
-    document.getElementById('mStrategy').innerText = j.strategy || "";
+feed.innerHTML = jobs.map((j,idx)=>`
+<div onclick="openDetails(${idx})"
+class="glass p-4 rounded-xl cursor-pointer hover:border-indigo-500">
 
-    document.getElementById('mLatex').innerText =
-        j.latex || "No suggestion";
+<h3 class="text-white font-bold">${j.title||"Role"}</h3>
+<p class="text-slate-400">${j.company||""}</p>
 
-    // ✅ SKILLS
-    const gaps = j.skills_missing || [];
-    document.getElementById('mGaps').innerHTML =
-        gaps.length
-        ? gaps.map(g => `<span>${g}</span>`).join('')
-        : "No gaps";
+<p class="text-xs text-rose-400 mt-2">
+${(j.skills_missing||[]).slice(0,2).join(', ')}
+</p>
 
-    // ✅ COURSES (SAFE)
-    const courses = j.courses || [];
-    document.getElementById('mCourses').innerHTML =
-        courses.length
-        ? courses.map(c => `
-            <div onclick="window.open(
-                'https://www.youtube.com/results?search_query=${encodeURIComponent(c.query || c.title)}'
-            )">
-                ▶ ${c.title || "Learn skill"}
-            </div>
-        `).join('')
-        : "No courses";
-
-    document.getElementById('detailModal').classList.remove('hidden');
+</div>
+`).join('');
 }
 
-function closeModal() {
-    document.getElementById('detailModal').classList.add('hidden');
+function openDetails(idx){
+const j=jobs[idx];
+
+document.getElementById('mTitle').innerText=j.title||"";
+document.getElementById('mCompany').innerText=j.company||"";
+document.getElementById('mStrategy').innerText=j.strategy||"";
+
+document.getElementById('mLatex').innerText =
+j.latex||"No suggestion";
+
+document.getElementById('mGaps').innerHTML =
+(j.skills_missing||[]).map(g=>`
+<span class="px-2 py-1 bg-rose-500/20 text-rose-400 rounded text-xs">${g}</span>
+`).join('') || "No gaps";
+
+document.getElementById('mCourses').innerHTML =
+(j.courses||[]).map(c=>`
+<div class="text-indigo-400 cursor-pointer"
+onclick="window.open('https://youtube.com/results?search_query=${encodeURIComponent(c.query||c.title)}')">
+▶ ${c.title}
+</div>
+`).join('') || "No courses";
+
+document.getElementById('detailModal').classList.remove('hidden');
+}
+
+function closeModal(){
+document.getElementById('detailModal').classList.add('hidden');
 }
 </script>
 
