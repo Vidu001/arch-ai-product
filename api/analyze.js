@@ -21,7 +21,8 @@ export default async function handler(req, res) {
     // 3. Robust Model Initialization
     // Using 1.5-flash as it is the most stable across all regions
     const model = genAI.getGenerativeModel({ 
-      model: "gemini-1.5-flash"
+     { model: "gemini-1.5-flash" },
+  { apiVersion: "v1" }
     });
 
     const systemPrompt = `
