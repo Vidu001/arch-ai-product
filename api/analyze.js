@@ -1,62 +1,105 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
   const { resumeText, seenJobs } = req.body;
+
+  if (!resumeText) {
+    return res.status(400).json({ error: "Missing resumeText" });
+  }
+
   const apiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey) return res.status(500).json({ error: "Server Configuration Error" });
+  if (!apiKey) {
+    return res.status(500).json({ error: "Missing API Key" });
+  }
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    
-    // FIX: Using "-latest" and correct 2-argument structure
-    // Argument 1: Model Params | Argument 2: Request Options
-    const model = genAI.getGenerativeModel(
-      { model: "gemini-1.5-flash-latest" }, 
-      { apiVersion: "v1" }
+    const prompt = `
+You are an AI career assistant.
+
+Analyze the resume and return STRICT JSON.
+
+DO NOT return markdown.
+DO NOT return explanation.
+ONLY return JSON.
+
+Exclude jobs already seen:
+${JSON.stringify(seenJobs || [])}
+
+FORMAT:
+
+{
+  "candidateName": "string",
+  "suggestedRole": "string",
+  "skills": ["string"],
+  "jobs": [
+    {
+      "title": "string",
+      "company": "string",
+      "score": number,
+      "gap": "string",
+      "strategy": "string",
+      "courseTitle": "string",
+      "latex": "string"
+    }
+  ]
+}
+
+Resume:
+${resumeText}
+`;
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: prompt }]
+            }
+          ]
+        })
+      }
     );
 
-    const systemPrompt = `
-      Analyze the resume and return a valid JSON object.
-      Exclude: ${JSON.stringify(seenJobs || [])}.
-      Return ONLY raw JSON:
-      {
-        "candidateName": "String",
-        "suggestedRole": "String",
-        "skills": ["String"],
-        "jobs": [
-          {
-            "title": "String",
-            "company": "String",
-            "score": 85,
-            "gap": "String",
-            "strategy": "String",
-            "latex": "String"
-          }
-        ]
-      }
-    `;
+    const data = await response.json();
 
-    const result = await model.generateContent([
-      { text: systemPrompt },
-      { text: `Resume Content: ${resumeText}` }
-    ]);
+    if (!data.candidates || !data.candidates.length) {
+      return res.status(500).json({
+        error: "Empty Gemini response",
+        raw: data
+      });
+    }
 
-    const response = await result.response;
-    const text = response.text();
-    
-    // Robust JSON extraction
-    const startIdx = text.indexOf('{');
-    const endIdx = text.lastIndexOf('}');
-    if (startIdx === -1) throw new Error("No JSON found in AI response");
-    
-    const data = JSON.parse(text.substring(startIdx, endIdx + 1));
-    return res.status(200).json(data);
+    let text = data.candidates[0].content.parts[0].text;
 
-  } catch (error) {
-    console.error("Crash Details:", error);
-    return res.status(500).json({ error: "Invocation Failed", details: error.message });
+    // Extract JSON safely
+    const start = text.indexOf("{");
+    const end = text.lastIndexOf("}");
+
+    if (start === -1 || end === -1) {
+      return res.status(500).json({
+        error: "Invalid JSON format from AI",
+        raw: text
+      });
+    }
+
+    const clean = text.substring(start, end + 1);
+    const parsed = JSON.parse(clean);
+
+    return res.status(200).json(parsed);
+
+  } catch (err) {
+    console.error("Server Error:", err);
+    return res.status(500).json({
+      error: "Server crashed",
+      details: err.message
+    });
   }
 }
