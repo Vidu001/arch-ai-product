@@ -52,7 +52,7 @@ ${resumeText}
 `;
 
     const response = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-001:generateContent?key=${apiKey}`,
+  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-latest:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: {
