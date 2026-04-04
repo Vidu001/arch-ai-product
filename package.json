@@ -1,22 +1,15 @@
 {
   "name": "arch-ai-product",
   "version": "1.0.0",
-  "description": "Strategic Career Command Center powered by Gemini",
   "type": "module",
   "dependencies": {
     "@google/generative-ai": "^0.21.0"
   },
-  "devDependencies": {
-    "vercel": "^39.0.0"
-  },
   "scripts": {
     "start": "vercel dev",
-    "deploy": "vercel",
-    "build": "echo 'No build step required for static frontend'"
+    "deploy": "vercel"
   },
   "engines": {
     "node": "20.x"
-  },
-  "author": "",
-  "license": "ISC"
+  }
 }
