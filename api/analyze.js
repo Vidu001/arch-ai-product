@@ -27,15 +27,6 @@ IMPORTANT RULES:
 - Be specific to skills and roles
 - Return ONLY valid JSON
 
-For each job:
-1. Identify REAL SKILL GAPS (technologies, tools, concepts)
-2. Separate:
-   - skills_missing (not in resume)
-   - skills_can_add (can be framed from existing experience)
-3. Recommend YouTube learning resources (search-style titles)
-4. Generate STRONG resume bullet points (LaTeX-ready)
-5. Give a short bridge strategy
-
 Avoid repeating previous jobs: ${JSON.stringify(seenJobs || [])}
 
 Return EXACT format:
@@ -70,12 +61,20 @@ Return EXACT format:
 }
 `;
 
+    // ✅ FINAL PROMPT (THIS WAS MISSING)
+    const finalPrompt = `
+${systemPrompt}
+
+Resume Content:
+${resumeText}
+`;
+
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://arch-ai-product.vercel.app",
+        "HTTP-Referer": "https://arch-ai-product.vercel.app", // optional
         "X-Title": "ArchAI"
       },
       body: JSON.stringify({
@@ -83,11 +82,11 @@ Return EXACT format:
         messages: [
           {
             role: "system",
-            content: "You are a strict JSON generator. Output ONLY valid JSON."
+            content: "You output ONLY valid JSON. No markdown, no explanation."
           },
           {
             role: "user",
-            content: prompt
+            content: finalPrompt
           }
         ],
         temperature: 0.7
@@ -95,6 +94,9 @@ Return EXACT format:
     });
 
     const data = await response.json();
+
+    // ✅ DEBUG LOG (VERY IMPORTANT)
+    console.log("RAW OPENROUTER RESPONSE:", JSON.stringify(data));
 
     if (!data.choices || !data.choices.length) {
       return res.status(500).json({
@@ -105,7 +107,7 @@ Return EXACT format:
 
     let text = data.choices[0].message.content;
 
-    // Clean JSON extraction
+    // ✅ CLEAN JSON EXTRACTION
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
 
@@ -117,7 +119,17 @@ Return EXACT format:
     }
 
     const clean = text.substring(start, end + 1);
-    const parsed = JSON.parse(clean);
+
+    let parsed;
+
+    try {
+      parsed = JSON.parse(clean);
+    } catch (parseError) {
+      return res.status(500).json({
+        error: "JSON parsing failed",
+        raw: clean
+      });
+    }
 
     return res.status(200).json(parsed);
 
