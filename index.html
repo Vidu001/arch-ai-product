@@ -4,373 +4,207 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ArchAI | Strategic Career Command Center</title>
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap');
-        
+
         body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #020617; }
         .glass { background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.08); }
         .premium-gradient { background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%); }
+
         .loader-spin { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-        
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
     </style>
 </head>
+
 <body class="text-slate-300 min-h-screen pb-12">
 
-    <!-- Navbar -->
-    <nav class="border-b border-slate-800/60 bg-slate-950/50 backdrop-blur-xl sticky top-0 z-[100]">
-        <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="premium-gradient p-2.5 rounded-xl shadow-lg shadow-indigo-500/20">
-                    <i class="fas fa-archway text-white text-xl"></i>
-                </div>
-                <h1 class="text-2xl font-black tracking-tighter text-white">Arch<span class="text-indigo-400">AI</span></h1>
-            </div>
-            <div id="statusControl" class="flex items-center gap-4">
-                <div id="apiIndicator" class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-800 border border-slate-700">
-                    <div class="w-1.5 h-1.5 rounded-full bg-slate-500"></div>
-                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Idle</span>
-                </div>
-                <button onclick="downloadLatex()" class="hidden sm:block text-xs font-bold text-slate-400 hover:text-white transition-colors">
-                    Export All (.tex)
-                </button>
-            </div>
-        </div>
-    </nav>
+<!-- Navbar -->
+<nav class="border-b border-slate-800/60 bg-slate-950/50 backdrop-blur-xl sticky top-0 z-[100]">
+    <div class="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+        <h1 class="text-2xl font-black text-white">Arch<span class="text-indigo-400">AI</span></h1>
 
-    <main class="max-w-7xl mx-auto px-6 py-12">
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            <!-- Left Panel: Profile & Upload -->
-            <div class="lg:col-span-4 space-y-6">
-                <div class="glass p-8 rounded-3xl relative overflow-hidden group">
-                    <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                        <i class="fas fa-user-astronaut text-6xl"></i>
-                    </div>
-                    
-                    <h2 class="text-sm font-black text-indigo-400 uppercase tracking-[0.2em] mb-6">Candidate Core</h2>
-                    
-                    <div id="uploadZone" class="mb-8">
-                        <label class="block border-2 border-dashed border-slate-800 rounded-2xl p-6 text-center hover:border-indigo-500/50 cursor-pointer transition-all bg-slate-900/30">
-                            <input type="file" id="resumeInput" accept=".pdf" class="hidden" onchange="handleResume(event)">
-                            <i class="fas fa-file-pdf text-2xl text-slate-600 mb-3 block"></i>
-                            <span id="uploadText" class="text-sm font-bold text-slate-400">Upload Resume</span>
-                        </label>
-                    </div>
+        <div id="apiIndicator" class="text-xs text-slate-400">Idle</div>
+    </div>
+</nav>
 
-                    <!-- Initial State (Visible until upload) -->
-                    <div id="profileBrief" class="space-y-4 opacity-50">
-                        <div class="h-4 w-3/4 bg-slate-800 rounded animate-pulse"></div>
-                        <div class="h-4 w-1/2 bg-slate-800 rounded animate-pulse"></div>
-                        <div class="flex gap-2 pt-2">
-                            <div class="h-6 w-16 bg-slate-800 rounded-full"></div>
-                            <div class="h-6 w-16 bg-slate-800 rounded-full"></div>
-                        </div>
-                    </div>
+<main class="max-w-7xl mx-auto px-6 py-12 grid lg:grid-cols-12 gap-8">
 
-                    <!-- Dynamic Profile (Hidden until API responds) -->
-                    <div id="actualProfile" class="hidden animate-in fade-in duration-500">
-                        <h3 id="userName" class="text-2xl font-black text-white mb-1"></h3>
-                        <p id="userRole" class="text-indigo-400 font-bold text-sm mb-6 uppercase tracking-wider italic"></p>
-                        <div id="userSkills" class="flex flex-wrap gap-2"></div>
-                    </div>
-                </div>
-
-                <!-- Pro Call to Action -->
-                <div class="bg-gradient-to-br from-indigo-600 to-purple-700 p-8 rounded-3xl text-white shadow-2xl shadow-indigo-500/10 relative overflow-hidden">
-                    <div class="relative z-10">
-                        <h3 class="text-xl font-black mb-2">ArchAI Pro</h3>
-                        <p class="text-sm text-indigo-100 mb-6 leading-relaxed">Automate your networking with AI-crafted cold emails for these specific leads.</p>
-                        <button class="w-full bg-white text-indigo-600 py-3 rounded-xl font-black text-sm shadow-xl shadow-black/10 transition-transform active:scale-95">Upgrade Dashboard</button>
-                    </div>
-                    <i class="fas fa-crown absolute -bottom-4 -right-4 text-8xl opacity-10 rotate-12"></i>
-                </div>
-            </div>
-
-            <!-- Right Panel: Strategic Matches -->
-            <div class="lg:col-span-8 space-y-6">
-                <div class="flex items-center justify-between px-2">
-                    <h3 class="text-xl font-black text-white">Strategic Market Matches</h3>
-                    <div class="flex gap-2">
-                        <button onclick="reanalyze()" class="p-2 text-slate-500 hover:text-indigo-400 transition-colors" title="Refresh Analysis">
-                            <i class="fas fa-redo-alt"></i>
-                        </button>
-                    </div>
-                </div>
-
-                <div id="jobFeed" class="space-y-4">
-                    <!-- Cards injected here -->
-                    <div id="emptyFeed" class="text-center py-20 opacity-30">
-                        <i class="fas fa-radar text-5xl mb-4 block"></i>
-                        <p class="font-bold uppercase tracking-widest text-xs">Awaiting Analysis...</p>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <!-- Detailed Modal -->
-    <div id="detailModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[200] hidden items-center justify-center p-4">
-        <div class="glass max-w-4xl w-full max-h-[90vh] rounded-[2.5rem] overflow-hidden flex flex-col shadow-2xl border-slate-800">
-            <div class="p-8 border-b border-slate-800 flex justify-between items-start">
-                <div class="flex gap-6 items-center">
-                    <div id="mScoreBox" class="w-16 h-16 rounded-2xl premium-gradient flex flex-col items-center justify-center text-white font-black shadow-lg shadow-indigo-500/20">
-                        <span id="mScore" class="text-lg">--</span>
-                        <span class="text-[8px] uppercase">Match</span>
-                    </div>
-                    <div>
-                        <h2 id="mTitle" class="text-2xl font-black text-white leading-tight"></h2>
-                        <p id="mCompany" class="text-indigo-400 font-bold italic"></p>
-                    </div>
-                </div>
-                <button onclick="closeModal()" class="text-slate-500 hover:text-white p-2 transition-colors">
-                    <i class="fas fa-times text-xl"></i>
-                </button>
-            </div>
-
-            <div class="flex-1 overflow-y-auto p-8 grid grid-cols-1 lg:grid-cols-2 gap-10">
-                <div class="space-y-8">
-                    <div>
-                        <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">The Bridge Strategy</h4>
-                        <p id="mStrategy" class="text-slate-300 leading-relaxed italic border-l-2 border-indigo-500/50 pl-4"></p>
-                    </div>
-                    <div>
-                        <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">Skill Gap Analysis</h4>
-                        <div id="mGaps" class="flex flex-wrap gap-2"></div>
-                    </div>
-                    <div>
-    <h4 class="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4">
-        Learning Path
-    </h4>
-    <div id="mCourses" class="space-y-2"></div>
-</div>
-                    <button id="applyBtn" class="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-black transition-all shadow-lg shadow-indigo-500/20 active:scale-95">
-                        Open Market Leads
-                    </button>
-                </div>
-
-                <div class="bg-slate-950/50 border border-slate-800 rounded-3xl p-6 flex flex-col">
-                    <div class="flex justify-between items-center mb-4">
-                        <h4 class="text-[10px] font-black text-indigo-400 uppercase tracking-[0.2em]">LaTeX Realignment</h4>
-                        <button onclick="copyModalLatex()" class="text-[10px] font-bold text-slate-500 hover:text-white uppercase">Copy</button>
-                    </div>
-                    <pre id="mLatex" class="text-[10px] text-slate-400 font-mono overflow-auto h-full leading-relaxed"></pre>
-                </div>
-            </div>
-        </div>
+<!-- LEFT -->
+<div class="lg:col-span-4 space-y-6">
+    <div class="glass p-6 rounded-2xl">
+        <input type="file" id="resumeInput" accept=".pdf" onchange="handleResume(event)">
+        <p id="uploadText">Upload Resume</p>
     </div>
 
-    <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
-        
-        let jobs = [];
-        let seenKeys = new Set();
-        let lastResumeText = '';
+    <div id="actualProfile" class="hidden">
+        <h3 id="userName"></h3>
+        <p id="userRole"></p>
+        <div id="userSkills"></div>
+    </div>
+</div>
 
-        async function handleResume(e) {
-            const file = e.target.files[0];
-            if(!file) return;
+<!-- RIGHT -->
+<div class="lg:col-span-8">
+    <div id="jobFeed"></div>
+</div>
 
-            document.getElementById('uploadText').innerText = "Analyzing...";
-            document.getElementById('apiIndicator').innerHTML = `<i class="fas fa-circle-notch loader-spin text-indigo-400"></i> <span class="text-[10px] font-bold text-indigo-400 uppercase tracking-widest ml-2">Processing PDF...</span>`;
+</main>
 
-            try {
-                const buf = await file.arrayBuffer();
-                const pdf = await pdfjsLib.getDocument({data: buf}).promise;
-                let text = '';
-                for (let i = 1; i <= pdf.numPages; i++) {
-                    const pg = await pdf.getPage(i);
-                    const ct = await pg.getTextContent();
-                    text += ct.items.map(x => x.str).join(' ');
-                }
-                lastResumeText = text;
-                await triggerAnalysis(false);
-            } catch (err) {
-                console.error(err);
-                alert("Could not parse PDF. Please try a different file.");
-            } finally {
-                document.getElementById('uploadText').innerText = "Replace Resume";
-            }
+<!-- MODAL -->
+<div id="detailModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center">
+
+<div class="glass p-6 w-[800px]">
+
+<h2 id="mTitle"></h2>
+<p id="mCompany"></p>
+
+<h4>Strategy</h4>
+<p id="mStrategy"></p>
+
+<h4>Skill Gaps</h4>
+<div id="mGaps"></div>
+
+<h4>Learning Path</h4>
+<div id="mCourses"></div>
+
+<h4>LaTeX Resume</h4>
+<pre id="mLatex"></pre>
+
+<button onclick="closeModal()">Close</button>
+
+</div>
+</div>
+
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+let jobs = [];
+let seenKeys = new Set();
+let lastResumeText = '';
+
+async function handleResume(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    document.getElementById('uploadText').innerText = "Analyzing...";
+
+    try {
+        const buf = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({data: buf}).promise;
+
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+            const pg = await pdf.getPage(i);
+            const ct = await pg.getTextContent();
+            text += ct.items.map(x => x.str).join(' ');
         }
 
-        async function triggerAnalysis(isRefresh) {
-            try {
-                const res = await fetch('/api/analyze', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        resumeText: lastResumeText,
-                        seenJobs: Array.from(seenKeys)
-                    })
-                });
+        lastResumeText = text;
+        await triggerAnalysis();
 
-                const data = await res.json();
-                console.log("API RESPONSE:", data);
-
-// ✅ Strong validation
-if (data.error) {
-    throw new Error(data.error);
+    } catch (err) {
+        console.error(err);
+        alert("PDF parsing failed");
+    }
 }
 
-if (!data.jobs || !Array.isArray(data.jobs)) {
-    throw new Error("Invalid jobs array");
+async function triggerAnalysis() {
+    try {
+        const res = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                resumeText: lastResumeText,
+                seenJobs: Array.from(seenKeys)
+            })
+        });
+
+        const data = await res.json();
+        console.log("API RESPONSE:", data);
+
+        // ✅ STRONG VALIDATION
+        if (data.error) throw new Error(data.error);
+        if (!Array.isArray(data.jobs)) throw new Error("Invalid jobs array");
+
+        updateSidebar(data);
+
+        jobs = data.jobs;
+        renderJobs();
+
+    } catch (err) {
+        console.error(err);
+        document.getElementById('apiIndicator').innerText = "Error";
+    }
 }
 
-                // Update Sidebar Dynamically
-                updateSidebar(
-                    data.candidateName || "Analyzed Candidate", 
-                    data.suggestedRole || "Verified Professional", 
-                    data.skills || []
-                );
+function updateSidebar(data) {
+    document.getElementById('actualProfile').classList.remove('hidden');
 
-                // Process Jobs
-                let newBatch = [];
-                for (let j of data.jobs) {
-                    const key = (j.title + j.company).toLowerCase();
-                    if (!seenKeys.has(key)) {
-                        seenKeys.add(key);
-                        newBatch.push(j);
-                    }
-                }
+    document.getElementById('userName').innerText =
+        data.candidateName || "Candidate";
 
-                jobs = isRefresh ? [...newBatch, ...jobs] : newBatch;
-                renderJobs();
-                
-                // Update Status
-                document.getElementById('apiIndicator').innerHTML = `<div class="w-1.5 h-1.5 rounded-full bg-emerald-500"></div><span class="text-[10px] font-bold text-emerald-400 uppercase tracking-widest ml-2">Synced</span>`;
-            } catch (err) {
-                console.error(err);
-                document.getElementById('apiIndicator').innerHTML = `<div class="w-1.5 h-1.5 rounded-full bg-rose-500"></div><span class="text-[10px] font-bold text-rose-400 uppercase tracking-widest ml-2">Sync Error</span>`;
-            }
-        }
+    document.getElementById('userRole').innerText =
+        data.suggestedRole || "Role";
 
-        function updateSidebar(name, role, skills) {
-            document.getElementById('profileBrief').classList.add('hidden');
-            document.getElementById('actualProfile').classList.remove('hidden');
-            document.getElementById('userName').innerText = name;
-            document.getElementById('userRole').innerText = role;
-            
-            if (skills.length > 0) {
-                document.getElementById('userSkills').innerHTML = skills.map(s => `
-                    <span class="px-2 py-1 bg-slate-800 rounded text-[10px] font-bold text-slate-400 border border-slate-700 hover:border-indigo-500/50 transition-colors">${s}</span>
-                `).join('');
-            } else {
-                document.getElementById('userSkills').innerHTML = `<span class="text-[10px] italic text-slate-600">Skills parsed via API</span>`;
-            }
-        }
+    document.getElementById('userSkills').innerHTML =
+        (data.skills || []).map(s => `<span>${s}</span>`).join('');
+}
 
-        function renderJobs() {
-            const feed = document.getElementById('jobFeed');
-            if(jobs.length === 0) return;
-            
-            feed.innerHTML = jobs.map((j, idx) => `
-                <div onclick="openDetails(${idx})" class="glass p-6 rounded-[2rem] border-slate-800/50 hover:border-indigo-500/30 transition-all cursor-pointer flex items-center justify-between group animate-in slide-in-from-bottom-2 duration-300">
-                    <div class="flex items-center gap-6">
-                        <div class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 font-black text-sm group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                            ${j.score}%
-                        </div>
-                        <div>
-                            <h4 class="font-black text-white group-hover:text-indigo-400 transition-colors leading-tight">${j.title}</h4>
-                            <p class="text-xs font-bold text-slate-500 italic">${j.company}</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-4">
-                        <div class="hidden md:block text-right">
-                            <p class="text-[10px] font-black text-slate-600 uppercase tracking-widest mb-1">Gap Detected</p>
-                            <p class="text-[10px] font-bold text-rose-500/80 uppercase max-w-[120px] truncate">${(j.skills_missing || []).slice(0,2).join(', ')}</p>
-                        </div>
-                        <i class="fas fa-chevron-right text-slate-700 group-hover:text-white group-hover:translate-x-1 transition-all"></i>
-                    </div>
-                </div>
-            `).join('');
-        }
+function renderJobs() {
+    const feed = document.getElementById('jobFeed');
 
-        function openDetails(idx) {
+    feed.innerHTML = jobs.map((j, idx) => `
+        <div onclick="openDetails(${idx})" class="border p-4 cursor-pointer">
+            <h3>${j.title || "Unknown Role"}</h3>
+            <p>${j.company || "Unknown Company"}</p>
+            <p>${(j.skills_missing || []).slice(0,2).join(', ')}</p>
+        </div>
+    `).join('');
+}
+
+function openDetails(idx) {
     const j = jobs[idx];
 
-    document.getElementById('mTitle').innerText = j.title;
-    document.getElementById('mCompany').innerText = j.company;
-    document.getElementById('mStrategy').innerText = j.strategy || "No strategy available";
-    document.getElementById('mScore').innerText = j.score || "--";
+    document.getElementById('mTitle').innerText = j.title || "";
+    document.getElementById('mCompany').innerText = j.company || "";
+    document.getElementById('mStrategy').innerText = j.strategy || "";
 
-    // ✅ FIXED LATEX
-    document.getElementById('mLatex').innerText = j.latex || "No resume suggestion generated";
+    document.getElementById('mLatex').innerText =
+        j.latex || "No suggestion";
 
-    // ✅ NEW GAP LOGIC (skills_missing instead of string split)
+    // ✅ SKILLS
     const gaps = j.skills_missing || [];
+    document.getElementById('mGaps').innerHTML =
+        gaps.length
+        ? gaps.map(g => `<span>${g}</span>`).join('')
+        : "No gaps";
 
-    document.getElementById('mGaps').innerHTML = gaps.length > 0 ? gaps.map(g => `
-        <span class="px-3 py-1.5 bg-rose-500/10 text-rose-400 rounded-xl text-[10px] font-bold border border-rose-500/20 uppercase tracking-wider">
-            ${g}
-        </span>
-    `).join('') : `<span class="text-xs text-slate-500 italic">No significant gaps detected</span>`;
-
-    // ✅ NEW: COURSES SECTION
-    document.getElementById('mCourses').innerHTML = (j.courses || []).length > 0
-        ? j.courses.map(c => `
-            <div 
-                class="text-xs text-indigo-400 underline cursor-pointer hover:text-indigo-300"
-                onclick="window.open('https://www.youtube.com/results?search_query=${encodeURIComponent(c.query)}','_blank')"
-            >
-                ▶ ${c.title}
+    // ✅ COURSES (SAFE)
+    const courses = j.courses || [];
+    document.getElementById('mCourses').innerHTML =
+        courses.length
+        ? courses.map(c => `
+            <div onclick="window.open(
+                'https://www.youtube.com/results?search_query=${encodeURIComponent(c.query || c.title)}'
+            )">
+                ▶ ${c.title || "Learn skill"}
             </div>
         `).join('')
-        : `<span class="text-xs text-slate-500 italic">No courses suggested</span>`;
+        : "No courses";
 
-    // Apply button
-    document.getElementById('applyBtn').onclick = () => {
-        const q = encodeURIComponent(`${j.title} ${j.company}`);
-        window.open(`https://www.linkedin.com/jobs/search/?keywords=${q}`, '_blank');
-    };
-
-    const modal = document.getElementById('detailModal');
-    modal.classList.remove('hidden');
-    modal.classList.add('flex');
+    document.getElementById('detailModal').classList.remove('hidden');
 }
 
-        function closeModal() {
-            document.getElementById('detailModal').classList.add('hidden');
-            document.getElementById('detailModal').classList.remove('flex');
-        }
+function closeModal() {
+    document.getElementById('detailModal').classList.add('hidden');
+}
+</script>
 
-        function downloadLatex() {
-            if(!jobs.length) return alert("No data to export. Please upload a resume first.");
-            const content = `\\documentclass{article}\n\\usepackage[utf8]{inputenc}\n\\begin{document}\n\\section*{ArchAI Market Realignment Snippets}\n${jobs.map(j => `% Alignment for ${j.title}\n${j.latex}`).join('\n\n')}\n\\end{document}`;
-            const blob = new Blob([content], { type: 'text/plain' });
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = 'career_realignment_export.tex';
-            a.click();
-        }
-
-        function copyModalLatex() {
-            const code = document.getElementById('mLatex').innerText;
-            navigator.clipboard.writeText(code).then(() => {
-                const btn = event.target;
-                const original = btn.innerText;
-                btn.innerText = "COPIED!";
-                setTimeout(() => btn.innerText = original, 2000);
-            });
-        }
-
-        function reanalyze() {
-            if(lastResumeText) {
-                triggerAnalysis(true);
-            } else {
-                document.getElementById('resumeInput').click();
-            }
-        }
-
-        // Close modal on escape
-        window.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeModal();
-        });
-    </script>
 </body>
 </html>
