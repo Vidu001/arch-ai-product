@@ -18,12 +18,15 @@ export default async function handler(req, res) {
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
     
-    // 3. Robust Model Initialization
-    // Using 1.5-flash as it is the most stable across all regions
-    const model = genAI.getGenerativeModel({ 
-     { model: "gemini-1.5-flash" },
-  { apiVersion: "v1" }
-    });
+    // 3. Robust Model Initialization (Syntax Fixed)
+    const model = genAI.getGenerativeModel(
+      { 
+        model: "gemini-1.5-flash",
+        // Enforce native JSON output directly from the API
+        generationConfig: { responseMimeType: "application/json" } 
+      },
+      { apiVersion: "v1" } // Passed correctly as the second argument
+    );
 
     const systemPrompt = `
       Analyze the resume text and return a valid JSON object.
@@ -44,11 +47,10 @@ export default async function handler(req, res) {
     ]);
 
     const response = await result.response;
-    let text = response.text();
+    const text = response.text();
     
-    // 5. Defensive JSON Parsing (Strips markdown backticks if present)
-    const cleanJson = text.replace(/```json/g, "").replace(/```/g, "").trim();
-    const data = JSON.parse(cleanJson);
+    // 5. Clean Parsing (Regex removed because native JSON is enforced)
+    const data = JSON.parse(text);
 
     return res.status(200).json(data);
 
