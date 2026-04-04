@@ -9,10 +9,10 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Missing resumeText" });
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
 
   if (!apiKey) {
-    return res.status(500).json({ error: "Missing API Key" });
+    return res.status(500).json({ error: "Missing OpenAI API Key" });
   }
 
   try {
@@ -21,15 +21,16 @@ You are an AI career assistant.
 
 Analyze the resume and return STRICT JSON.
 
-DO NOT return markdown.
-DO NOT return explanation.
-ONLY return JSON.
+Rules:
+- No markdown
+- No explanation
+- Only JSON
+- Avoid duplicate jobs already seen
 
-Exclude jobs already seen:
+Seen jobs:
 ${JSON.stringify(seenJobs || [])}
 
-FORMAT:
-
+Format:
 {
   "candidateName": "string",
   "suggestedRole": "string",
@@ -51,33 +52,32 @@ Resume:
 ${resumeText}
 `;
 
-    const response = await fetch(
-  `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-latest:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [{ text: prompt }]
-            }
-          ]
-        })
-      }
-    );
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: "gpt-4o-mini",
+        messages: [
+          { role: "system", content: "You output only valid JSON." },
+          { role: "user", content: prompt }
+        ],
+        temperature: 0.7
+      })
+    });
 
     const data = await response.json();
 
-    if (!data.candidates || !data.candidates.length) {
+    if (!data.choices || !data.choices.length) {
       return res.status(500).json({
-        error: "Empty Gemini response",
+        error: "Empty OpenAI response",
         raw: data
       });
     }
 
-    let text = data.candidates[0].content.parts[0].text;
+    let text = data.choices[0].message.content;
 
     // Extract JSON safely
     const start = text.indexOf("{");
@@ -85,7 +85,7 @@ ${resumeText}
 
     if (start === -1 || end === -1) {
       return res.status(500).json({
-        error: "Invalid JSON format from AI",
+        error: "Invalid JSON from AI",
         raw: text
       });
     }
