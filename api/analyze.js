@@ -41,6 +41,12 @@ Return EXACT format:
       "company": "string",
       "score": number,
 
+      "location": "string",
+      "experience": "string",
+
+      "apply_link": "direct job application URL",
+      "source": "LinkedIn | Wellfound | Careers Page | Indeed",
+
       "skills_missing": ["string"],
       "skills_can_add": ["string"],
 
@@ -59,6 +65,9 @@ Return EXACT format:
     }
   ]
 }
+- ALWAYS provide a REAL apply_link (no placeholders, no fake URLs)
+-Ensure all results are relevant, recent, and actionable to start applying immediately
+- Give atleast 20 jobs, dont hallucinate, in order of the recents ones before
 `;
 
     // ✅ FINAL PROMPT (THIS WAS MISSING)
