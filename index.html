@@ -46,30 +46,22 @@ body {
 <!-- LEFT PANEL -->
 <div class="lg:col-span-4 space-y-6">
 
-<!-- Upload Card -->
 <div class="glass p-8 rounded-3xl text-center hover:border-indigo-500 transition">
-    
     <label class="cursor-pointer">
         <input type="file" class="hidden" onchange="handleResume(event)">
-        
         <div class="mb-4">
             <i class="fas fa-file-upload text-3xl text-indigo-400"></i>
         </div>
-        
         <p id="uploadText" class="font-semibold text-slate-300">
             Upload Resume
         </p>
     </label>
 </div>
 
-<!-- Profile -->
 <div id="actualProfile" class="hidden glass p-6 rounded-3xl">
-
 <h3 id="userName" class="text-xl font-bold text-white"></h3>
 <p id="userRole" class="text-indigo-400 mb-4"></p>
-
 <div id="userSkills" class="flex flex-wrap gap-2"></div>
-
 </div>
 
 </div>
@@ -87,7 +79,6 @@ body {
 
 <!-- MODAL -->
 <div id="detailModal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center">
-
 <div class="glass w-[900px] max-h-[90vh] overflow-y-auto rounded-3xl p-8">
 
 <div class="flex justify-between items-start mb-4">
@@ -126,6 +117,7 @@ if(!file) return;
 
 document.getElementById('uploadText').innerText="Analyzing...";
 
+try {
 const buf=await file.arrayBuffer();
 const pdf=await pdfjsLib.getDocument({data:buf}).promise;
 
@@ -138,9 +130,16 @@ text+=ct.items.map(x=>x.str).join(' ');
 
 lastResumeText=text;
 await triggerAnalysis();
+
+} catch(err) {
+    console.error(err);
+    alert("PDF parsing failed");
+}
 }
 
 async function triggerAnalysis(){
+try {
+
 const res=await fetch('/api/analyze',{
 method:'POST',
 headers:{'Content-Type':'application/json'},
@@ -149,13 +148,49 @@ body:JSON.stringify({resumeText:lastResumeText})
 
 const data=await res.json();
 
-if(data.error) throw new Error(data.error);
-if(!Array.isArray(data.jobs)) throw new Error("Invalid jobs");
+console.log("API RESPONSE:", data);
+
+// ✅ Strong validation
+if (!data || typeof data !== "object") {
+    throw new Error("Invalid API response");
+}
+
+if (data.error) {
+    throw new Error(data.error);
+}
+
+if (!data.jobs || !Array.isArray(data.jobs)) {
+    throw new Error("Invalid jobs array");
+}
 
 updateSidebar(data);
 
-jobs=data.jobs;
+jobs = data.jobs;
+const safeJobs = Array.isArray(jobs) ? jobs : [];
+
+if(safeJobs.length === 0) {
+    document.getElementById('jobFeed').innerHTML = `
+        <div class="text-center py-20 opacity-30">
+            <p>No jobs found. Try reanalyzing.</p>
+        </div>
+    `;
+    return;
+}
+
 renderJobs();
+
+document.getElementById('apiIndicator').innerText = "Synced";
+
+} catch(err) {
+    console.error(err);
+    document.getElementById('apiIndicator').innerText = "Error";
+
+    document.getElementById('jobFeed').innerHTML = `
+        <div class="text-center py-20 text-rose-400">
+            ⚠️ Something went wrong. Try again.
+        </div>
+    `;
+}
 }
 
 function updateSidebar(data){
@@ -171,82 +206,56 @@ document.getElementById('userSkills').innerHTML =
 }
 
 function renderJobs() {
-    const feed = document.getElementById('jobFeed');
+const feed = document.getElementById('jobFeed');
+const safeJobs = Array.isArray(jobs) ? jobs : [];
 
-    feed.innerHTML = jobs.map((j, idx) => `
-        <div class="glass p-6 rounded-[2rem] border border-slate-800/50 hover:border-indigo-500/30 transition-all group animate-in slide-in-from-bottom-2 duration-300">
-            
-            <div class="flex items-center justify-between">
-                
-                <!-- LEFT CLICKABLE -->
-                <div onclick="openDetails(${idx})" class="flex items-center gap-6 cursor-pointer flex-1">
-                    
-                    <div class="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-indigo-400 font-black text-sm group-hover:bg-indigo-600 group-hover:text-white transition-colors">
-                        ${j.score || "--"}%
-                    </div>
+feed.innerHTML = safeJobs.map((j, idx) => `
+<div class="glass p-6 rounded-2xl border border-slate-800/50 hover:border-indigo-500/30 transition-all flex justify-between items-center">
 
-                    <div>
-                        <h4 class="font-black text-white group-hover:text-indigo-400 transition-colors leading-tight">
-                            ${j.title || "Unknown Role"}
-                        </h4>
-                        <p class="text-xs font-bold text-slate-500 italic">
-                            ${j.company || "Unknown Company"}
-                        </p>
+    <div onclick="openDetails(${idx})" class="cursor-pointer">
+        <h4 class="text-white font-bold">${j.title || "Unknown Role"}</h4>
+        <p class="text-sm text-slate-400">${j.company || "Unknown Company"}</p>
+        <p class="text-xs text-rose-400">
+            ${(Array.isArray(j.skills_missing) ? j.skills_missing : []).slice(0,2).join(', ')}
+        </p>
+    </div>
 
-                        <p class="text-[11px] text-rose-400 mt-1">
-                            ${(j.skills_missing || []).slice(0,2).join(', ')}
-                        </p>
-                    </div>
-                </div>
+    <button 
+    onclick="window.open('${j.apply_link || '#'}','_blank'); event.stopPropagation();"
+    class="bg-indigo-600 px-3 py-1 rounded text-xs font-bold">
+    Apply
+    </button>
 
-                <!-- RIGHT SIDE CTA -->
-                <div class="flex flex-col items-end gap-2">
-                    
-                    <!-- APPLY BUTTON -->
-                    <button 
-                        onclick="window.open('${j.apply_link}', '_blank')"
-                        class="px-4 py-2 text-xs font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white transition-all shadow-lg shadow-indigo-500/20 active:scale-95"
-                    >
-                        Apply →
-                    </button>
-
-                    <!-- VIEW DETAILS -->
-                    <button 
-                        onclick="openDetails(${idx})"
-                        class="text-[10px] text-slate-500 hover:text-indigo-400 transition"
-                    >
-                        View Details
-                    </button>
-
-                </div>
-
-            </div>
-
-        </div>
-    `).join('');
+</div>
+`).join('');
 }
 
 function openDetails(idx){
-const j=jobs[idx];
+const j=jobs[idx]|| {};
 
-document.getElementById('mTitle').innerText=j.title||"";
-document.getElementById('mCompany').innerText=j.company||"";
-document.getElementById('mStrategy').innerText=j.strategy||"";
+document.getElementById('mTitle').innerText = j.title || "Unknown Role";
+document.getElementById('mCompany').innerText = j.company || "Unknown Company";
+document.getElementById('mStrategy').innerText = j.strategy || "No strategy available";
+document.getElementById('mLatex').innerText = j.latex || "No suggestion available";
 
-document.getElementById('mLatex').innerText=j.latex||"";
+const gaps = Array.isArray(j.skills_missing) ? j.skills_missing : [];
 
 document.getElementById('mGaps').innerHTML =
-(j.skills_missing||[]).map(g=>`
-<span class="px-2 py-1 bg-rose-500/20 text-rose-400 text-xs rounded">${g}</span>
-`).join('');
+gaps.length
+? gaps.map(g=>`<span class="px-2 py-1 bg-rose-500/20 text-rose-400 text-xs rounded">${g}</span>`).join('')
+: "No gaps";
+
+const courses = Array.isArray(j.courses) ? j.courses : [];
 
 document.getElementById('mCourses').innerHTML =
-(j.courses||[]).map(c=>`
+courses.length
+? courses.map(c=>`
 <div class="text-indigo-400 cursor-pointer hover:underline"
 onclick="window.open('https://youtube.com/results?search_query=${encodeURIComponent(c.query||c.title)}')">
-▶ ${c.title}
+▶ ${c.title || "Learn"}
 </div>
-`).join('');
+`).join('')
+: "No courses";
 
 document.getElementById('detailModal').classList.remove('hidden');
 }
@@ -254,8 +263,6 @@ document.getElementById('detailModal').classList.remove('hidden');
 function closeModal(){
 document.getElementById('detailModal').classList.add('hidden');
 }
-
-    
 </script>
 
 </body>
