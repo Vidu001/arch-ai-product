@@ -3,7 +3,7 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { resumeText, seenJobs } = req.body;
+  const { resumeText } = req.body;
 
   if (!resumeText) {
     return res.status(400).json({ error: "Missing resumeText" });
@@ -16,20 +16,22 @@ export default async function handler(req, res) {
   }
 
   try {
+    // 🔥 FAST OPTIMIZED PROMPT
     const systemPrompt = `
-You are an elite career strategist AI.
+You are a career assistant AI.
 
-Analyze the resume and generate HIGH-QUALITY structured job matches.
+Task:
+- Analyze resume
+- Suggest relevant job roles
+- Identify skill gaps
+- Suggest learning resources
 
-IMPORTANT RULES:
-- No generic answers
-- No placeholders
-- Be specific to skills and roles
-- Return ONLY valid JSON
+STRICT RULES:
+- Output ONLY valid JSON
+- Keep responses SHORT
+- No explanations
 
-Avoid repeating previous jobs: ${JSON.stringify(seenJobs || [])}
-
-Return EXACT format:
+Return format:
 
 {
   "candidateName": "string",
@@ -41,49 +43,42 @@ Return EXACT format:
       "company": "string",
       "score": number,
 
-      "location": "string",
-      "experience": "string",
-
-      "apply_link": "direct job application URL",
-      "source": "LinkedIn | Wellfound | Careers Page | Indeed",
-
       "skills_missing": ["string"],
-      "skills_can_add": ["string"],
 
-      "gap": "comma separated important missing skills",
-
-      "strategy": "2-3 line sharp career advice",
+      "strategy": "short advice",
 
       "courses": [
         {
-          "title": "YouTube course title",
-          "query": "search query"
+          "title": "string",
+          "query": "string"
         }
       ],
 
-      "latex": "Improved resume bullet in LaTeX format"
+      "latex": "short bullet"
     }
   ]
 }
-- ALWAYS provide a REAL apply_link (no placeholders, no fake URLs)
--Ensure all results are relevant, recent, and actionable to start applying immediately
-- Give atleast 20 jobs, dont hallucinate, in order of the recents ones before
+
+IMPORTANT:
+- Return ONLY 5 jobs
+- Keep everything concise
+- No fake links
 `;
 
-    // ✅ FINAL PROMPT (THIS WAS MISSING)
+    // 🔥 LIMIT INPUT SIZE (VERY IMPORTANT)
     const finalPrompt = `
-${systemPrompt}
-
-Resume Content:
-${resumeText}
+Resume:
+${resumeText.slice(0, 6000)}
 `;
+
+    console.time("AI_CALL");
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${apiKey}`,
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://arch-ai-product.vercel.app", // optional
+        "HTTP-Referer": "https://arch-ai-product.vercel.app",
         "X-Title": "ArchAI"
       },
       body: JSON.stringify({
@@ -91,20 +86,22 @@ ${resumeText}
         messages: [
           {
             role: "system",
-            content: "You output ONLY valid JSON. No markdown, no explanation."
+            content: systemPrompt
           },
           {
             role: "user",
             content: finalPrompt
           }
         ],
-        temperature: 0.7
+        temperature: 0.5,
+        max_tokens: 1200
       })
     });
 
+    console.timeEnd("AI_CALL");
+
     const data = await response.json();
 
-    // ✅ DEBUG LOG (VERY IMPORTANT)
     console.log("RAW OPENROUTER RESPONSE:", JSON.stringify(data));
 
     if (!data.choices || !data.choices.length) {
@@ -116,7 +113,7 @@ ${resumeText}
 
     let text = data.choices[0].message.content;
 
-    // ✅ CLEAN JSON EXTRACTION
+    // 🔥 SAFE JSON EXTRACTION
     const start = text.indexOf("{");
     const end = text.lastIndexOf("}");
 
@@ -133,7 +130,7 @@ ${resumeText}
 
     try {
       parsed = JSON.parse(clean);
-    } catch (parseError) {
+    } catch (err) {
       return res.status(500).json({
         error: "JSON parsing failed",
         raw: clean
