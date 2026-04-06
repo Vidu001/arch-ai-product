@@ -1,6 +1,9 @@
 import { buildPrompt } from "../services/promptService";
 import { callLLM } from "../services/llmService";
 import { extractJSON } from "../utils/jsonParser";
+import formidable from "formidable";
+import fs from "fs";
+import { extractTextFromPDF } from "../utils/pdfParser";
 
 export default async function handler(req, res) {
   if (req.method !== "POST") {
